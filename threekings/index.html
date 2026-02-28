@@ -156,8 +156,100 @@
                 </table>
             </div>
 
+            <h3>Implementation Lineage: From Wires to Tensors</h3>
+            <div class="overflow-x-auto my-6">
+                <table class="min-w-full bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden">
+                    <thead class="bg-slate-100 text-slate-700">
+                        <tr>
+                            <th class="py-3 px-4 text-left text-sm font-semibold tracking-wide">Technology Layer</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold tracking-wide">Transport Implementation</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold tracking-wide">Interaction Implementation</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold tracking-wide">The "Hardware Trick"</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 text-sm">
+                        <tr>
+                            <td class="py-3 px-4 font-semibold text-brand-900">CAM-8 (1990s)</td>
+                            <td class="py-3 px-4"><strong>Hardware Wires:</strong> Physical address offsets across a 3D memory manifold.</td>
+                            <td class="py-3 px-4"><strong>Lookup Tables (SRAM):</strong> High-speed SRAM buffers mapping inputs to outputs.</td>
+                            <td class="py-3 px-4"><strong>Bit-Slicing:</strong> Every bit-plane had its own wiring to move data in parallel.</td>
+                        </tr>
+                        <tr class="bg-slate-50/50">
+                            <td class="py-3 px-4 font-semibold text-brand-900">SIMP/STEP (2000s)</td>
+                            <td class="py-3 px-4"><strong>Scan Processor Offset:</strong> A virtual-interrupt loop calculating <code>(x+dx, y+dy)</code>.</td>
+                            <td class="py-3 px-4"><strong>Python DSL to C:</strong> Logic defined in Python, compiled into rapid C-macros.</td>
+                            <td class="py-3 px-4"><strong>Virtual Interrupts:</strong> Handled boundaries without slowing the main scan loop.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 px-4 font-semibold text-brand-900">LatticeFlow (2026)</td>
+                            <td class="py-3 px-4"><strong>Tensor Roll:</strong> Vectorized memory strides (<code>jnp.roll</code>) moving entire arrays at once.</td>
+                            <td class="py-3 px-4"><strong>Bitwise Kernel:</strong> Fused JAX/XLA kernels performing bitwise logic.</td>
+                            <td class="py-3 px-4"><strong>SIMD / GPU Fusion:</strong> The compiler merges shift and rule into optimized tensor ops.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="bg-slate-800 text-slate-300 text-sm p-5 rounded-lg mb-8 border border-slate-700">
+                <strong class="text-brand-400">Hardware Acceleration Note:</strong> While the current 1.47 GSPS HPP experiments run purely on the CPU leveraging SIMD (Single Instruction, Multiple Data) instructions, this tensor-based approach natively supports massive hardware acceleration. The transition to JAX (<code>jnp</code>) means that the exact same LatticeFlow codebase can be dispatched out-of-the-box to modern GPUs, unlocking massive parallel speedups.
+            </div>
+
+            <!-- Anatomy of the Generative Kernel -->
+            <h2>II. Anatomy of the Generative Kernel (LatticeFlow)</h2>
+            <p>A crucial outcome of this sprint is translating the historical data movement concepts into pure JAX Python. The code below illustrates how the <strong>Rule</strong>, <strong>Data Movement</strong>, and <strong>Reversibility Operator</strong> are defined in LatticeFlow.</p>
+
+<pre><code class="language-python">@staticmethod
+@jax.jit
+def _hpp_rule(state):
+    # 1. UNPACK: Extract the 4 directional bit-planes from the single uint8 tensor
+    n, s, e, w = (state >> 0)&1, (state >> 1)&1, (state >> 2)&1, (state >> 3)&1
+    
+    # 2. EVALUATE: Determine head-on collisions across the entire grid simultaneously
+    coll_ns = (n & s) & ~(e | w)  # North & South exist, East & West empty
+    coll_ew = (e & w) & ~(n | s)  # East & West exist, North & South empty
+    
+    # 3. INTERACT: Apply the self-inverse HPP swap via bitwise masking
+    new_n = jnp.where(coll_ns, 0, jnp.where(coll_ew, 1, n))
+    new_s = jnp.where(coll_ns, 0, jnp.where(coll_ew, 1, s))
+    new_e = jnp.where(coll_ew, 0, jnp.where(coll_ns, 1, e))
+    new_w = jnp.where(coll_ew, 0, jnp.where(coll_ns, 1, w))
+    
+    # 4. REPACK: Re-assemble the bits into the uint8 tensor
+    return (new_n << 0) | (new_s << 1) | (new_e << 2) | (new_w << 3)
+
+@staticmethod
+@jax.jit
+def _forward_kernel(state):
+    # TRANSPORT (Forward): Roll bit-planes along their velocity vectors
+    n = jnp.roll((state >> 0)&1, -1, 0)
+    s = jnp.roll((state >> 1)&1, 1, 0)
+    e = jnp.roll((state >> 2)&1, 1, 1)
+    w = jnp.roll((state >> 3)&1, -1, 1)
+    
+    # KERNEL FUSION: Apply interaction rule immediately to shifted state
+    return LatticeFlowHPP._hpp_rule((n << 0) | (s << 1) | (e << 2) | (w << 3))
+
+@staticmethod
+@jax.jit
+def _backward_kernel(state):
+    # TRANSPORT (Reverse): Invert shift vectors to walk backward in time
+    n = jnp.roll((state >> 0)&1, 1, 0)
+    s = jnp.roll((state >> 1)&1, -1, 0)
+    e = jnp.roll((state >> 2)&1, -1, 1)
+    w = jnp.roll((state >> 3)&1, 1, 1)
+    
+    return LatticeFlowHPP._hpp_rule((n << 0) | (s << 1) | (e << 2) | (w << 3))
+</code></pre>
+
+            <div class="bg-brand-50 border-l-4 border-brand-500 p-4 my-6 rounded-r-lg">
+                <h4 class="font-bold text-brand-900 mt-0 mb-1">The "Phase-Sync" Secret</h4>
+                <p class="text-sm text-brand-900 m-0">
+                    To achieve the "Three Kings" Echo, reversing time is not just a matter of rolling the tensors backward. When the system switches direction, an extra standalone <code>_hpp_rule</code> must be fired. This un-collides the particles from the final forward step so they don't instantly shift away from each other in the first backward step, resulting in zero noise.
+                </p>
+            </div>
+
             <!-- Visual Sequence -->
-            <h2>II. The Visual Sequence: There and Back Again</h2>
+            <h2>III. The Visual Sequence: There and Back Again</h2>
             <p>The "Three Kings" Echo demonstrates the conservation of information. The structured initials of Toffoli (T), Margolus (M), and Bennett (B)—topped with three-point triangular crowns—are thermalized into a chaotic gas, only to be perfectly reconstructed via the time-reversal operator.</p>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
@@ -235,7 +327,6 @@
                 </div>
             </div>
 
-            <!-- FHP Gallery -->
             <h3 class="text-xl font-bold mt-12 mb-4">Extension: The FHP Hexagonal Lattice</h3>
             <p>The Colab experiment additionally extends this Generative Lattice Flow methodology to the <strong>FHP (Frisch-Hasslacher-Pomeau)</strong> hexagonal lattice model. The three stages of the FHP echo—structured initialization, thermodynamic dissipation, and reversible reconstruction—are shown below.</p>
             
@@ -266,9 +357,9 @@
                 <strong>Performance Metrics:</strong> Operating on a 400x647 grid, the LatticeFlow FHP engine processes complex 6-way hexagonal collisions at an estimated sustained throughput of <strong>~25.8 MSPS</strong> (inclusive of interactive overhead). At this speed, the complete 2,000-step macroscopic "there and back" journey (1,000 steps forward + 1,000 steps reversed) resolves in approximately <strong>20 seconds</strong> of total clock time on a standard cloud CPU.
             </div>
 
-            <!-- Kernel Anatomy & Lineage -->
-            <h2>III. Historical Lineage of the Kernel</h2>
-            <p>A crucial outcome of this 6-hour sprint is translating the historic data movement paradigms into pure Python frameworks. By tracing the evolution of the <strong>HPP Collision Rule</strong>, we can see how the conceptual decoupling remains identical even as the compiler and hardware change.</p>
+            <!-- Historical Lineage -->
+            <h2>IV. Historical Lineage: CAM-8 & SIMP/STEP</h2>
+            <p>While LatticeFlow uses pure JAX arrays, tracing the historical evolution of the <strong>HPP Collision Rule</strong> reveals how the conceptual decoupling of movement and logic has remained a constant throughout the hardware's evolution.</p>
 
             <div class="space-y-6 my-8">
                 <!-- CAM-8 -->
@@ -277,8 +368,12 @@
                         <span class="text-brand-500 font-mono text-sm font-bold">1. CAM-8 (Hardware SRAM LUT, ~1990s)</span>
                         <span class="text-slate-400 text-xs">Hardware Architecture</span>
                     </div>
-                    <div class="p-4 text-sm text-slate-300 font-mono leading-relaxed">
-                        /* The CAM-8 did not evaluate logic on the fly. Instead, a host PC pre-calculated all possible bit-state outcomes into a Lookup Table (LUT) using Forth or C. During the simulation, the hardware simply used the current 16-bit site state as a memory address to fetch the next state directly from high-speed SRAM in a single clock cycle. */
+                    <div class="p-5 text-sm text-slate-300 font-mono leading-relaxed border-t border-slate-700">
+                        # The CAM-8 did not evaluate logic on the fly. <br>
+                        # Instead, a host PC pre-calculated all possible bit-state outcomes into a Lookup Table (LUT).<br>
+                        # During the simulation, the hardware used the current 16-bit site state as a memory address <br>
+                        # to fetch the next state directly from high-speed SRAM in a single clock cycle.<br>
+                        # Transport was handled by physical wire routing and address offsets across a 3D memory manifold.
                     </div>
                 </div>
 
@@ -286,15 +381,25 @@
                 <div class="bg-slate-800 rounded-lg overflow-hidden shadow-lg">
                     <div class="bg-slate-900 px-4 py-2 flex items-center justify-between">
                         <span class="text-blue-400 font-mono text-sm font-bold">2. SIMP/STEP (Python DSL, ~2000s)</span>
-                        <span class="text-slate-400 text-xs">Python to C-Compiler</span>
+                        <span class="text-slate-400 text-xs">Python DSL to C</span>
                     </div>
-                    <div class="p-0">
+                    <div class="p-0 border-t border-slate-700">
 <pre><code class="language-python" style="margin:0; background:transparent;">#-------------------------------- COLLISION 
 def hpp():  # scatter at right angles on collision
     if ( (p0==p2) and (p1==p3) ):
         p0._ = p3;    p1._ = p2       # swap horizontally
         p3._ = p0;    p2._ = p1
 hpp = Rule(hpp)
+
+#-------------------------------- RENDERING
+white = OutSignal(UInt8,generator=[1,1])   
+
+def intensity():   
+    white[0,0]._ = (p0+p1+p2+p3)*255/4
+    white[0,1]._ = (p0+p1+p2+p3)*255/4    
+
+render_rule = Rule(intensity)
+rend = Renderer(render_rule,outputs=white)
 
 #-------------------------------- Declare the update
 hpp_step = Sequence([
@@ -313,67 +418,10 @@ reverse_hpp_step = Sequence([
         hpp])</code></pre>
                     </div>
                 </div>
-
-                <!-- LatticeFlow -->
-                <div class="bg-slate-800 rounded-lg overflow-hidden shadow-lg border border-brand-500">
-                    <div class="bg-slate-900 px-4 py-2 flex items-center justify-between">
-                        <span class="text-brand-100 font-mono text-sm font-bold">3. LatticeFlow (XLA Fused Tensor, 2026)</span>
-                        <span class="text-slate-400 text-xs">JAX Python</span>
-                    </div>
-                    <div class="p-0">
-<pre><code class="language-python" style="margin:0; background:transparent;">@staticmethod
-@jax.jit
-def _hpp_rule(state):
-    # UNPACK: Extract the 4 directional bit-planes from the single uint8 tensor
-    n, s, e, w = (state >> 0)&1, (state >> 1)&1, (state >> 2)&1, (state >> 3)&1
-    
-    # EVALUATE: Determine head-on collisions across the entire grid simultaneously
-    coll_ns = (n & s) & ~(e | w)
-    coll_ew = (e & w) & ~(n | s)
-    
-    # INTERACT & REPACK: Apply self-inverse HPP swap via bitwise operations
-    new_n = jnp.where(coll_ns, 0, jnp.where(coll_ew, 1, n))
-    new_s = jnp.where(coll_ns, 0, jnp.where(coll_ew, 1, s))
-    new_e = jnp.where(coll_ew, 0, jnp.where(coll_ns, 1, e))
-    new_w = jnp.where(coll_ew, 0, jnp.where(coll_ns, 1, w))
-    
-    return (new_n << 0) | (new_s << 1) | (new_e << 2) | (new_w << 3)
-
-@staticmethod
-@jax.jit
-def _forward_kernel(state):
-    # TRANSPORT (Forward): Roll bit-planes along their velocity vectors
-    n = jnp.roll((state >> 0)&1, -1, 0)
-    s = jnp.roll((state >> 1)&1, 1, 0)
-    e = jnp.roll((state >> 2)&1, 1, 1)
-    w = jnp.roll((state >> 3)&1, -1, 1)
-    
-    # KERNEL FUSION: Apply interaction rule immediately to shifted state
-    return LatticeFlowHPP._hpp_rule((n << 0) | (s << 1) | (e << 2) | (w << 3))
-
-@staticmethod
-@jax.jit
-def _backward_kernel(state):
-    # TRANSPORT (Reverse): Invert shift vectors to walk backward in time
-    n = jnp.roll((state >> 0)&1, 1, 0)
-    s = jnp.roll((state >> 1)&1, -1, 0)
-    e = jnp.roll((state >> 2)&1, -1, 1)
-    w = jnp.roll((state >> 3)&1, 1, 1)
-    
-    return LatticeFlowHPP._hpp_rule((n << 0) | (s << 1) | (e << 2) | (w << 3))</code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-brand-50 border-l-4 border-brand-500 p-4 my-6 rounded-r-lg">
-                <h4 class="font-bold text-brand-900 mt-0 mb-1">The "Phase-Sync" Secret</h4>
-                <p class="text-sm text-brand-900 m-0">
-                    To achieve the "Three Kings" Echo, reversing time is not just a matter of rolling the tensors backward. When the system switches direction, an extra standalone <code>_hpp_rule</code> must be fired. This un-collides the particles from the final forward step so they don't instantly shift away from each other in the first backward step, resulting in zero noise.
-                </p>
             </div>
 
             <!-- Future Directions -->
-            <h2>IV. Future Directions: Building the LatticeFlow Library</h2>
+            <h2>V. Future Directions: Building the LatticeFlow Library</h2>
             <p>This endeavor is a foundation meant to be built upon. The ultimate vision is to establish <strong>LatticeFlow</strong> as a formal, open-source python library—the direct spiritual inheritor of the CAM-8 work and SIMPSTEP for modern hardware. We invite contributors to help build this roadmap:</p>
             <ul class="list-disc pl-6 mb-6">
                 <li><strong>AI-Assisted Legacy Porting:</strong> A key next step is executing a full port of the legacy codebase housed at <a href="https://github.com/tedbach76/latticeflow/tree/main/threekings/simpstep" target="_blank" class="text-brand-500 hover:text-brand-700 underline font-mono break-words">github.com/tedbach76/latticeflow/tree/main/threekings/simpstep</a>. We will leverage AI coding agents, specifically <strong>Claude Code</strong>, to autonomously translate the C-macro paradigms of SIMPSTEP into optimized JAX tensors.</li>
@@ -398,7 +446,7 @@ def _backward_kernel(state):
                 <li><strong>Hardware Target:</strong> Intel(R) Xeon(R) Broadwell (2 Cores, 55MB L3 Cache) achieving 1.47 GSPS (HPP) / 25.8 MSPS (FHP).</li>
                 <li><strong>LLM Partner:</strong> Gemini Pro.</li>
             </ul>
-            <h4>Some seed prompts employed:</h4>
+            <h4>A sampling of the seed prompts & conceptual instructions employed:</h4>
             <ol class="list-decimal pl-6 bg-slate-800 text-slate-300 p-6 rounded-xl font-mono text-sm shadow-inner space-y-2">
                 <li>"Translate the SIMP/STEP conceptual separation of Transport and Interaction into vectorized JAX tensors."</li>
                 <li>"Implement a bit-packed 4-bit HPP collision rule using only bitwise logical operators to ensure XLA fusion."</li>
@@ -408,34 +456,18 @@ def _backward_kernel(state):
 
             <h2>Appendix B: References & Essential Links</h2>
             <ul class="list-none space-y-3 pl-0">
-                <li class="flex items-start">
-                    <span class="text-brand-500 mr-2">▪</span>
-                    <span>Toffoli, T., & Margolus, N. (1987). <a href="https://mitpress.mit.edu/9780262531207/cellular-automata-machines/" target="_blank" rel="noopener noreferrer" class="text-brand-600 hover:underline"><em>Cellular Automata Machines: A New Environment for Modeling</em></a>. MIT Press. (The foundational CAM-8 manual).</span>
-                </li>
-                <li class="flex items-start">
-                    <span class="text-brand-500 mr-2">▪</span>
-                    <span>Bach, E. A. (1999). <a href="https://dspace.mit.edu/handle/1721.1/16694" target="_blank" rel="noopener noreferrer" class="text-brand-600 hover:underline"><em>A programming environment for spatial computers</em></a>. Master's thesis, Massachusetts Institute of Technology. (The thesis behind the original SIMP/STEP concepts).</span>
-                </li>
-                <li class="flex items-start">
-                    <span class="text-brand-500 mr-2">▪</span>
-                    <span>Bennett, C. H. (1973). <a href="https://research.ibm.com/publications/logical-reversibility-of-computation" target="_blank" rel="noopener noreferrer" class="text-brand-600 hover:underline"><em>Logical Reversibility of Computation</em></a>. IBM Journal of Research and Development.</span>
-                </li>
-                <li class="flex items-start">
+                <li class="flex items-start"><span class="text-brand-500 mr-2">▪</span><span>Toffoli, T., & Margolus, N. (1987). <a href="https://mitpress.mit.edu/9780262531207/cellular-automata-machines/" target="_blank" class="text-brand-600 hover:underline"><em>Cellular Automata Machines</em></a>. MIT Press.</span></li>
+                <li class="flex items-start"><span class="text-brand-500 mr-2">▪</span><span>Bach, E. A. (2007). <a href="https://open.bu.edu/handle/2144/11019" target="_blank" class="text-brand-600 hover:underline"><em>Methodology and Implementation of a Software Architecture for Cellular and Lattice-Gas Automata</em></a>. Doctoral dissertation, Boston University. (Advisor: Prof. Tommaso Toffoli).</span></li>
+                <li class="flex items-start"><span class="text-brand-500 mr-2">▪</span><span>Bennett, C. H. (1973). <a href="https://research.ibm.com/publications/logical-reversibility-of-computation" target="_blank" class="text-brand-600 hover:underline"><em>Logical Reversibility of Computation</em></a>. IBM J. Res. Dev.</span></li>
+                                <li class="flex items-start">
                     <span class="text-brand-500 mr-2">▪</span>
                     <span>Hardy, J., Pomeau, Y., & Pazzis, O. (1973). <em>Time evolution of a two-dimensional model system</em>. Journal of Mathematical Physics.</span>
                 </li>
-                <li class="flex items-start">
-                    <span class="text-brand-500 mr-2">▪</span>
-                    <span>Bach, E. A. (2026). <a href="https://docs.google.com/document/d/1Dgca_jZR1RxuokmznGJviZUyDC0HcVc9JbOR0nsEgsc/edit?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-brand-600 hover:underline"><em>The Entropy of Ideas: Document Provenance and Conditional Kolmogorov Complexity</em></a>. Working Draft. (A fun conceptual reference).</span>
-                </li>
-                <li class="flex items-start mt-4 p-4 bg-brand-50 border border-brand-200 rounded-lg shadow-sm">
-                    <span class="text-brand-500 font-bold mr-2">↳</span>
-                    <span><a href="https://colab.research.google.com/drive/1qHhDEB0Fh7lyzGmlrYqBc7q4Njy0Ja3u#scrollTo=4VXZNVrxQlu5" target="_blank" rel="noopener noreferrer" class="font-semibold text-brand-900 hover:underline flex items-center">
-                        <svg class="w-5 h-5 mr-1 text-brand-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
-                        Live Interactive Experiment: The Three Kings Echo & FHP (Google Colab)
-                    </a></span>
-                </li>
+                <li class="flex items-start"><span class="text-brand-500 mr-2">▪</span><span>Bach, E. A. (2026). <a href="https://docs.google.com/document/d/1Dgca_jZR1RxuokmznGJviZUyDC0HcVc9JbOR0nsEgsc/edit?usp=sharing" target="_blank" class="text-brand-600 hover:underline"><em>The Entropy of Ideas</em></a>. Working Draft.</span></li>
+                <li class="flex items-start mt-4 p-4 bg-brand-50 border border-brand-200 rounded-lg shadow-sm"><span class="text-brand-500 font-bold mr-2">↳</span><span><a href="https://colab.research.google.com/drive/1qHhDEB0Fh7lyzGmlrYqBc7q4Njy0Ja3u#scrollTo=4VXZNVrxQlu5" target="_blank" class="font-semibold text-brand-900 hover:underline">Live Interactive Experiment: The Three Kings Echo (Google Colab)</a></span></li>
             </ul>
+
+
 
         </article>
     </main>
