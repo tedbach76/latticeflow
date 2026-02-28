@@ -1,0 +1,478 @@
+\documentclass{manual}
+
+\usepackage{apalike}
+\usepackage{graphicx}
+\usepackage{alltt}	% Load macros for PostScript figures
+
+\usepackage{amsmath}
+\usepackage{amsfonts} % for \mathbb{Z} % the integers from tt's mathbook.tex
+
+\usepackage{array}              % for middle alignment in tabular
+\usepackage{xspace}
+
+% ======== PICTURE ========
+
+% Justifying Utilities for labeling and marking axes
+\def\cstrip#1{\setbox0=\hbox{$#1$}\kern-.5\wd0\lower2pt\box0}
+\def\rstrip#1{\setbox0=\hbox{$#1$}\kern-\wd0\lower2pt\box0}
+\def\lstrip#1{\setbox0=\hbox{$#1$}\lower2pt\box0}
+\def\Lstrip#1{\setbox0=\hbox{$\mskip2mu#1$}\lower2pt\box0}
+
+
+% ================================ %
+% Jon Polimeni's wrappers 
+\newcommand{\fig}[1]{Fig.~\ref{fig:#1}}
+
+\newcommand{\fnmark}{\footnotemark\xspace}
+\newcommand{\fntext}[1]{\footnotetext{#1}}
+% customized refs
+\newcommand{\figref}[1]{Fig.~\ref{fig:#1}}
+\newcommand{\chapref}[1]{Chapter~\ref{#1}}
+%\newcommand{\secref}[1]{\S\ref{#1}}
+\newcommand{\secref}[1]{Section~\ref{#1}}
+\newcommand{\thmref}[1]{\textrm{Thm.~\ref{#1}}}
+\newcommand{\appref}[1]{Appendix~\ref{#1}}
+\newcommand{\fnref}[1]{footnote~\ref{#1}}
+\newcommand{\tableref}[1]{Table~\ref{#1}}
+\newcommand{\pgref}[1]{pg.~\pageref{#1}}
+\newcommand{\rtarrow}{\rightarrow}
+% ================================ %
+\newcommand{\Mod}{\ensuremath{\mathrm{mod}}}
+
+\everymath{\def~#1{\mathsf{#1}}}        % for vectors and linear operators
+\everydisplay{\def~#1{\mathsf{#1}}}     % for vectors and linear operators
+
+ %% `by' in multidimensional measurements, as 2' by 4' or MxN
+\mathchardef\BY="0202
+\newcommand{\by}{\ensuremath{\BY}}              % 3\by4 will spell 3x4
+
+%\newcommand{\vect}[1]{\ensuremath{\mathbf{#1}}}	
+
+\newenvironment{mylisting}
+{\begin{list}{}{\setlength{\leftmargin}{1em}}\item\scriptsize\bfseries}
+{\end{list}}
+
+\newenvironment{mytinylisting}
+{\begin{list}{}{\setlength{\leftmargin}{1em}}\item\tiny\bfseries}
+{\end{list}}
+
+% Figures
+\newcommand{\figlabel}[1]{\label{fig:#1}}
+
+%%%% Single-column figure
+\newcommand{\Fig}[4][!htb]{% [position] label, picture, caption
+\begin{figure}[#1]
+ \centering\leavevmode#3%
+ \caption{#4}
+ \figlabel{#2}
+\end{figure}                 }
+ \let\figonecol\Fig
+
+% ================================ %
+\title{
+  The SIMP/STEP Manual:   \\
+  A Python Environment for 
+  Cellular and Lattice-Gas Automata
+  }
+
+\author{Ted Bach}
+\authoraddress{
+	\bf{Boston University Programmable Matter Group}\\
+	Email: \email{tbach@pm.bu.edu} \\
+        \url{http://pm.bu.edu/}
+}
+
+%\date{January 30, 2004 }	% XXX update before final release!
+\release{0.7 pre-release 2}
+\setreleaseinfo{}
+\setshortversion{0.7 pre-rel 2}
+
+\makeindex                      % tell \index to actually write the
+                                 % .idx file
+%\makemodindex                   % ... and the module index as well.
+% ================================================================
+\begin{document}
+% ================================================================
+% TODO:
+%   - Replace LatticeArray with PeriodicStructure? RepeatingStructure?
+%
+% 
+% 
+% - rule
+%   - non-overlapping outputs
+%   - output assignment semantics
+% - difference between referencing a signal in the *rule context* and in the
+%   global context (is a neighbor point in a rule and a slice containing all of
+%   grid in the global context). 
+% - Document regions
+% - Document the use of the NUMARRAY package.
+% - Get rid of declarecolors?
+
+\maketitle
+\ifhtml
+\chapter*{Abstract\label{front}}
+\fi
+
+% Comment this out for draft versions
+%\input{copyright}
+Copyright \copyright{} 2004,2005 Boston University Programmable Matter Group
+
+%See the end of this document for complete license and permissions
+%information.
+% ================================ %
+\begin{abstract}
+% ================================ %
+\noindent
+
+This reference manual documents SIMP/STEP, a Python environment for
+cellular and lattice-gas automata.  SIMP (SIMP Interface to Matter
+Programming) provides user programming abstractions that target the
+essence of ``programmable matter'' via cellular and lattice gas
+automata.  STEP (Space-Time Event Processor) is an abstract interface
+to computational machinery (software as well as hardware) for running
+the fine-grained, parallel dynamics specified by SIMP programs.
+
+% and targets
+% `programmable matter' implemented as spatio-temporally discrete,
+% parallel, local, homogeneous dynamical systems such as cellular
+% automata and lattice gases.
+
+The first chapter is a tutorial that uses examples of cellular
+automata, lattice gases, and partitioning cellular automata to explain
+how to program with \module{simp}.  This includes methods and classes
+for declaring and initializing parallel state variables, defining a
+local dynamics on them (i.e. a cellular automaton rule), rendering,
+viewing, creating user interfaces, scripting, and gathering
+statistics.  The second is a reference manual that documents the SIMP
+programming constructs made accessible to the user through the Python
+\module{simp} module.  The third chapter documents the STEP interface,
+the STEP implementations currently distributed with the software and
+software engineering, and package structuring issues relevant to the
+developer.
+
+%  and discusses the implementation strategies for the STEPs distributed 
+% with SIMP.
+
+\medskip
+See \url{http://pm.bu.edu/} for the most current version of this document.
+
+\medskip
+\medskip
+% programming environments, array renderers
+% and viewers, and interactive dynamics control environments.
+
+%\citetitle[../tut/tut.html]{Python Tutorial}; the
+%\citetitle[../ref/ref.html]{Python Reference Manual} remains the
+
+We thank Silvio Capobianco and Charles Turner for insightful comments
+on various drafts of this document, the DOE for initial support of
+this work under grant 4097-5, and Tom Toffoli whose encouragement,
+advice, inspiration, and editing was critical in shaping this project.
+
+\end{abstract}
+\tableofcontents
+%\makemodindex
+
+%% Chapters
+
+
+\include{tutorial}
+\include{reference}
+\include{developer}
+
+
+
+%
+%
+%% DESCRIBE LATTICE POSITIONS
+%%\include{lattice}
+%
+%
+\renewcommand{\indexname}{Index}
+\input{simpmanual.ind}                 % Index
+\bibliographystyle{apalike} 
+\bibliography{simp} 
+\end{document}
+
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%\section{renderer interface}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+%% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%\section{console interface}
+%% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%
+%Like STEP, the console defines an abstract interface.  For the console, it
+%is to display and user interface capabilities.  Currently, there is only 
+%one working console, \module{pygame}.
+%
+%The current console implementation works much like a SIMP script.  It 
+%calls operations based on key commands.  It does not call operations 
+%as a well written script might, however, it is nonetheless effective. 
+
+
+
+
+
+
+%# def scaleup(imgarray):
+%#   """All scaling is done by the viewer using scaleup functions...."""
+%#   size = N.array(imgarray.shape)*2
+%#   scaleup = N.zeros(size)
+%#   scaleup[::2,::2] = imgarray
+%#   scaleup[1::2,::2] = imgarray
+%#   scaleup[:,1::2] = scaleup[:,::2]
+%#   surfdemo_show(scaleup, 'scaleup')
+
+%# def scaleup(imgarray,k):
+%#   """Scale an image up by an integer factor, k"""
+%#   size = N.array(imgarray.shape)*k
+%#   scaleup = N.zeros(size)
+%#   
+%#   for i in range(0,k):  # fill in every kth row
+%#      scaleup[i::k,i::k] = imgarray
+%#   for i in range(0,k):  # fill in the rows
+%#      scaleup[:,i::k] = scaleup[:,::k]
+%#   
+%#   
+
+
+%   \subsection{Technical Details of Rendering and Viewing}
+%   
+%     In the discussion below we first discuss technical issues related
+%     to displaying an array and then outline the current implementation.
+%   
+%   \subsubsection{The Issues}
+%   
+%     We are interested in mapping a 2D array onto a video framebuffer---that 
+%     block of pixels that the video card draws on the monitor.  
+%     We would like to do this in the presence of a windowing environment like
+%     X or MS windows.  On the surface, this seems like a simple
+%     task: just scan the array and framebuffer alike, point-by-point reading 
+%     an element value from the array, translating it to a color-appropriate 
+%     pixel value, and writing the result to the framebuffer.  It's just a 
+%     two-level nested loop performing a read, a value translation via a function 
+%     or lookup table, and a write.  What could be more simple?
+%   
+%   \subsubsection{ Accessing the Framebuffer }
+%   
+%       Indeed, this really is a `simple matter of programming' (tongue planted
+%       firmly in cheek).  At least for the non-expert, this task that
+%       seemed so trivial is actually Herculean and, in fact, more like cleaning
+%       stables than wrestling pythons.  It requires understanding framebuffer 
+%       management details in a windowing environment. In requires 
+%       figuring out how to get the low-level, video-card-specific pixel values 
+%       that represent desired colors.  It requires finding the handful of 
+%       magic API calls needed to do the job out of a scantly documented 
+%       haystack of irrelevant ones.
+%     
+%       Let us first concentrate on getting access to the framebuffer.  In
+%       principle, all one needs is a pointer to the framebuffer's starting 
+%       memory location and the structure of the memory layout.  However,
+%       it turns out that in windowing environments like X or MS Windows 
+%       this is strictly forbidden.  This is for two reasons.  First, the windowing
+%       environment's fundamental task---allocating screen real-estate among
+%       the overlapping windows of several applications---requires strict control.
+%       Giving applications free range over the framebuffer simply wouldn't do. 
+%       Second, in many cases, the video card's memory is outside that of the 
+%       PC's address space and in order to access it, special driver IO routines
+%       must be invoked.
+%   
+%       As a result of these constraints, the windowing environment only
+%       gives an application a secondary buffer---a canvas of sorts---on which
+%       to draw.  When the application draws on its own window, it must first
+%       write pixel values onto this canvas and then tell the windowing 
+%       environment to show it.  The windowing environment then decides 
+%       which regions of the canvas actually to copy onto the framebuffer for 
+%       display. 
+%     
+%       In the best-case scenario, the canvas'es memory is shared
+%       between the application, the windowing environment and the
+%       framebuffer.  That is, it is somewhere in main memory accessible 
+%       to both the application and to the video card---by direct memory 
+%       access (DMA), for example.  In the worst case scenario, the canvas'es 
+%       memory is not shared, as will be case for networked windowing 
+%       in which applications running on one machine are displayed 
+%       remotely.  An example of this is X windows, which runs in networked
+%       mode by default.  However, when application and display are on the same
+%       machine, shared memory can be achieved using the MIT-SHM extensions to
+%       the X-windows API.
+%     
+%   
+%   \subsubsection{ Color to Pixel Mapping }
+%   
+%       Assuming that the canvas has been obtained, one must still render 
+%       the array onto it. The core of the rendering loop must map 
+%       array elements to pixel values.  The element value may already 
+%       be a RGB triple, in which case the corresponding pixel value can 
+%       be determined straightaway, or it may be something else, in which case 
+%       the RGB triple for it must be determined first.  In either case, we 
+%       eventually need a way to map from RGB color triples to pixel values.
+%   
+%       (Note that as a shortcut, most API's also allow one to circumvent color
+%       allocation by writing RGB values directly to a special device-independent
+%       canvas.  However, this approach requires the window manager to map to
+%       pixel values before writing to the framebuffer and is often slower than
+%       using device dependent canvases.)
+%   
+%       There are three ways accomplish the mapping.  The most general way 
+%       is by calling some function code to do it.  In fact, the windowing
+%       API typically includes a such function.  The problem with using it 
+%       is that, the mapping is repeated over many elements.  Executing
+%       a function call for each element can be rather expensive.  Therefore,
+%       when possible, macros, hash maps, and lookup tables are often used.
+%   
+%       A macro can be used when mapping colors to pixel values is a
+%       simple matter of packing bits.  This is the case when the video
+%       uses true color with pixels being no more than three 8-bit
+%       unsigned RGB triples.  However, the when the function function is
+%       trivial, it may still be faster to use a hash map or lookup table.
+%      
+%       The hash-map is essentially a way of caching results of the color mapping
+%       function.  Rather than computing the pixel value for a RGB triple afresh 
+%       each time, the hash map is used to store pixel values for triples that 
+%       have already been seen.  If the colors needed are known ahead of time, 
+%       the color map data structure can be initialized all at once.
+%       A hash map works well in the commonly encountered case that the 
+%       same colors are used over and over again.  
+%   
+%       When a rendering function is employed the hash map can be used to 
+%       get pixel values directly from element values. Rather than first
+%       using the rendering function to get a RGB triple and then using the 
+%       RGB triple to get a pixel value, the hash map can be used to store 
+%       the composition of these two operations.  Rather than mapping from 
+%       element to RGB and then to pixel it can just go from element to pixel.
+%       The only requirement is that a hash function should exist for the pixel 
+%       values and that the distribution of element values be narrow
+%       enough so that the the hash table will not have too many collisions.
+%   
+%       If the number of possible element values is small enough that the 
+%       all of them can be listed in memory, we can do away with the hash table
+%       and the hash function and use a lookup table to look up pixels
+%       directly from elements.  Among the options, this is the fastest 
+%       since computing the mapping from element value to pixel is merely 
+%       that of reading from memory.
+%   
+%       Overall, we choose the LUT implementation when the number of
+%       possible pixel values is small and compact since it is the
+%       fastest. We choose a hash map when the number of actual values is
+%       small since it is the second fastest. We use a function or a macro
+%       the faster choices have been eliminated.
+%   
+%   \subsubsection{ Mapped color }
+%   
+%         Most modern video hardware uses a static color map in which the 
+%         correspondence between pixel values and color triples is static 
+%         and directly computable.  Examples are 16 bit DirectColor and 24
+%         bit TrueColor.  However, in order to save space, the correspondence 
+%         may also be dynamic and indirect.
+%         An example is 8-bit mapped color in which a pixel's value is defined  
+%         by a dynamic, 256-entry color map table.  Each entry in the table 
+%         contains a richer, 24-bit (8 bits per RGB channel) color. 
+%         The video hardware can thusly compress the framebuffer's size 
+%         by 1/3---ignoring the 768 bytes of color map memory---as compared 
+%         using 24-bit pixels.
+%   
+%         Although indirect pixel-to-color mappings save space, they limit
+%         the number of colors that the framebuffer can show simultaneously.  
+%         Moreover, even if an application accordingly limits the number colors 
+%         that it employs, it is likely that, since the color map 
+%         is shared by all application windows on the framebuffer, another 
+%         application may use a different, incompatible set of colors. The
+%         available colors are limited to the union of all colors requested 
+%         by applications sharing a color map.  When colors run out,
+%         applications have to make do with what is available.
+%     
+%         Private color maps are a way to get around this.  With them,
+%         applications are guaranteed a fixed number of colors and may
+%         decide what pixel values correspond to which colors.  This opens
+%         the door for a very particular, hardware-dependent, optimization
+%         in which the array is stored directly on the canvas and the
+%         color map directly renders element values to display colors.
+%   
+%         Unfortunately, private color maps wreak havoc on the
+%         simultaneous display of application windows having different
+%         maps.  Since the the framebuffer can use only one map at-a-time,
+%         the application whose map is currently in use will look fine,
+%         while other applications will have the wrong colors and will
+%         look bizarre. Additionally, switching the active map gives
+%         annoying flashes.
+%   
+%         Fortunately, the need for mapped color has diminished with the advent 
+%         of large video memories.  The only case where mapped color now retains
+%         an advantage is when the aforementioned color map LUT based 
+%         rendering scheme is employed.
+%   
+%   \subsubsection{ Portability }
+%   
+%       The basic tasks of obtaining a canvas and allocating colors are the 
+%       same on all modern computer platforms.  Unfortunately, the structure 
+%       of the API calls needed to accomplish this varies widely.  One could 
+%       just write windowing-environment-independent wrapper code for 
+%       obtaining windows and canvases, allocating colors, and the like, but 
+%       fortunately portable windowing libraries such as GTK have already done 
+%       this.
+%       
+%   \subsubsection{ The Implementation }
+%   
+%     In its initial implementation, \class{ArrayViewer} uses GTK to get a
+%     window and a device-dependent image onto which it will render the
+%     array.  GTK was chosen since it provides an OS-independent, though
+%     video device dependent interface (which permits greater efficiency)
+%     to device-specific canvases and color maps.  
+%   
+%     To perform rendering, \class{ArrayViewer} invokes Python loops that
+%     iterate over array elements.  Color values are obtained by calling a
+%     rendering function.  Color values are converted to pixel values via
+%     a color map.  The color map is implemented as a Python dictionary
+%     (hash table) and generated dynamically during rendering; the
+%     renderer looks up colors in up the color dictionary, allocating them
+%     with GTK functions on misses (whenever new values are encountered).
+%   
+%     Because of all of this, the rendering may be slow.  Each element
+%     must be accessed through the matrix '__get_index__' method, passed
+%     through the rendering function, have its pixel value looked up in
+%     the color map (with a pixel allocation in the event of a color map
+%     miss), and be stored in the canvas; finally, canvas must be
+%     transfered to the framebuffer.
+%   
+%   \subsubsection{Color Maps and Color Allocation }
+%     
+%       ArrayViewer will use whatever coloring capabilities happen to 
+%       be available on a given system. If a color map (eg. an 8-bit map) is 
+%       used,  ArrayViewer will greedily allocate new colors as 
+%       it comes across them in the course of rendering.  Therefore, using 
+%       a wide range of values can cause the color map to run out of colors 
+%       during rendering.  Although such a situation will not cause rendering
+%       to  fail, it may yield an unpleasing view.  If the system uses 
+%       24 bit true-color, ArrayViewer will be able to render a wide range of 
+%       values without difficulty. However, since the size of the Python 
+%       dictionary used as the hash table for the color-map varies with the range 
+%       of colors employed and the speed of access to the dictionary varies 
+%       with the distribution of colors, rendering may suffer if the 
+%       color distribution is too wide.
+%     
+%   \subsubsection{ Future Optimization Possibilities }
+%   
+%       Currently rendering is simple and portable, but not optimized.
+%       In the future, it might be worthwhile to construct optimized C 
+%       implementations of the rendering loop.  Such an implementations would
+%       require: that the array be implemented and accessed as a C data structure, 
+%       that the color map function and the color to pixel mapping be
+%       converted to rendering inner-loop C code or lookup tables (in the case 
+%       that the number of possible element values is sufficiently restricted), 
+%       and the canvas data structure be accessed entirely in C.  
+%   
+%       Special purpose rendering macros could also be used in order to 
+%       allow \class{ArrayViewer} to efficiently render arrays that 
+%       employ a wide range of color values. 
+
+
+
+ 
+
+
+

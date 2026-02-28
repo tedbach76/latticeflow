@@ -1,0 +1,2331 @@
+% ================================================================
+                               \chapter{Reference}
+% ================================================================
+\declaremodule{standard}{simp}
+\modulesynopsis{The SIMPle interface to programmable matter.}
+\moduleauthor{Ted Bach}{tbach@bu.edu}
+
+
+\module{simp} is a user-level programming module that simplifies writing
+programmable matter experiments, instantiating run-time STEPs
+(space-time event processors) to implement them, and making and
+calling the primitive STEP operations (ops) that serve as a STEP's
+instructions.   In this chapter we document the user-level functions and classes
+defined by \module{simp} and its sub-modules.
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Importing and initializing SIMP} \label{sec:initialize}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+The \module{simp} module is meant to be imported directly with
+\begin{verbatim}
+from simp import *
+\end{verbatim}
+Doing this imports the basic SIMP and STEP definitions.  After
+importing \module{simp}, one must call first \function{initialize}. This
+creates and initializes a STEP engine and sets up defaults used for further
+SIMP constructs.  Typically, one will only need to pass the \var{size}
+parameter to \function{initialize}.  This parameter declares the
+number of dimensions and the extent of the coordinates.  \var{size} is
+the only parameter without a default value.
+
+In addition, one may have to specify a \emph{generator} parameter,
+which is typically not needed when writing rules with the usual
+orthogonal (square grid) geometry, but will be needed for lattice-gas,
+partitioned cellular automata, and non-orthogonal geometries (such as
+hexagonal lattices). 
+% Please read Section~\ref{sec:grid} for more details.
+
+%default values from \module{simp}.  Unless these modules are given an
+%explicit reference to SIMP, they will look in the global namespace for
+%\function{simpmodule}. 
+
+
+The generator matrix is a 
+$n\by n$ ($n$ is the number of dimensions) upper triangular
+integer matrix with strictly positive integers on the diagonal
+and smaller, non-negative integer column elements specifying the
+default lattice for \class and signal objects. May also be given as
+a rectangular size vector (diagonal of a HNF) as described in
+\ref{sec:grid}.  
+
+%      The meaning of the generator is described in detail in \secref{sec:grid}.
+
+\begin{funcdesc}{initialize}{size, generator=None,
+                             stepname=None, stepargs=None, verbose=1}
+% boundary='WRAP'
+
+  The SIMP module initialization function sets up the module's global
+  parameters.
+
+  Calling initialize instantiates a STEP. Therefore, initialize must
+  be called before any \module{step} objects are instantiated or
+  \module{step} methods are called. initialize can only be called once
+  per module, raises an \exception{Exception} if called twice.
+
+  \begin{note}
+  The parameters are stored in the \module{simp} module as private
+  variables (eg. \code{size} is \code{simp.__size__}) and uses them
+  first to load a STEP and later to construct default parameters for
+  STEP ops and data types.
+  \end{note}
+
+  
+  \begin{datadesc}  {size}
+      Vector giving the size of the grid. The length of the
+      \var{size} vector sets the number of dimensions, $n$.
+  \end{datadesc}
+
+  \begin{datadesc}  {generator}
+     The default generator (an $n$ dimensional matrix or vector) for
+     \class{LatticeArray} objects (eg. \class{Rule} and \class{Signal}
+     objects). Defaults to identity---the generator used for an
+     ordinary CA.
+%     The default is an identity matrix specifying $n$-dimensional orthonormal lattice.
+  \end{datadesc}
+
+  \begin{datadesc}  {stepname} 
+       String giving the name of the step implementation
+       module. Defaults to the default module for the installation or
+       set the name set in the \module{simp} configuration file 
+       (see \secref{sec:config}). 
+       Examples include \code{"reference"} and \code{"pc"}.
+
+       The module must either exist in \module{simp.stepmodules} or be in the
+       Python system path (\var{sys.path}) and define the STEP
+       interface as per \secref{sec:stepinterace}.  \function{initialize} 
+       raises an \exception{ImportError} if the module can not be found or does
+       not export the STEP interface.
+  \end{datadesc}
+
+  \begin{datadesc}  {stepargs} 
+     A keyword dictionary containing arguments for initializing the STEP. 
+     The nature of the arguments depends on the \module{step} module used. 
+     Defaults to no arguments.
+  \end{datadesc}
+
+  \begin{datadesc}  {verbose} 
+     Integer controling how much information \module{simp} and the
+     step implementation module print.  0 prints nothing. 1 prints the
+     standard information, informing the user when tables are being
+     compiled {\it et cetera}. 2 prints more detailed information and
+     suggestions.  3 and above print debugging information. Defaults to 1.
+  \end{datadesc}
+
+\end{funcdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{The simp configuration file} \label{sec:config}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+You can create a configuration file that the \module{simp} module will
+read when it is imported.  On \UNIX\ systems it's
+\file{/home/username/.simp} and on modern Windows systems it's
+\file{C:/Documents and Settings/username/.simp} or \file{C:/.simp} if
+that path doesn't exist.
+
+The configuration file is just an ordinary Python file. Think of it as
+extra code sourced at the beginning of \module{simp} module.  Code in
+\file{.simp} can't override \module{simp} function definitions, however it may
+provide new definitions for your scripts.  But, the primary use is
+setting initialization defaults.  A full description of the
+initialization parameters appears in \ref{sec:initialize}.  Defaults
+that can be overridden include,
+
+\begin{datadescni}  {stepname}
+   The name of the STEP implementation module.
+\end{datadescni}
+
+\begin{datadescni}  {verbose}
+   Indicates what SIMP should print.  
+\end{datadescni}
+
+\begin{datadescni}  {stepargs}
+   Dictionary of optional arguments intended for the STEP implementation. 
+\end{datadescni}
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{What the SIMP module does}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+\module{simp} initializes the STEP implementation, provides default
+parameters to the STEP operations, and provides the operations with a
+reference to the STEP implementation. The reference is needed so that
+the objects may register themselves with the STEP.  These objects need
+a way to get a reference to the \module{simp} module.  Usually they
+get this constructor arguments (through the \code{__simp__}
+attribute), however, a few of the objects require that \module{simp}
+be passed as an explicit parameter.  In particular, \class{Signal} and
+\class{OutSignal} require a \module{simp} instance as a constructor
+parameter in order to get default values. Because of this,
+\module{simp} provides wrapper functions for declaring \class{Signal}
+and \class{OutSignal} objects.
+
+\begin{warning}
+   \class{simp.Signal} and \class{simp.OutSignal} are not
+   classes.  They are wrapper functions---the actual classes 
+    are \class{simp.step.Signal} and
+   \class{simp.step.OutSignal}. Therefore calling 
+   \code{isinstance(ob,Signal)} raises an error. 
+    Use \code{isinstance(ob,simp.step.Signal)}   instead.
+\end{warning}
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{SIMP helper functions}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+\begin{funcdesc}{simpmodule}{}
+  Returns the current \module{simp} module.  Useful for getting a
+  reference to the \code{simp} module when it's imported with with
+  \samp{from simp import *}.
+\end{funcdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Dictionary building functions}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+
+\begin{funcdesc}{kwdict}{**kwargs}
+  Returns a keyword dictionary keyed on the keywords as strings.  Allows one
+  to construct string-keyed dictionaries with statements like
+\begin{verbatim}
+>>> kwdict(a=1,b=3)
+{"a":1,"b":2}
+\end{verbatim}
+  
+%  (The only line of code is \code{return kwargs})
+\end{funcdesc}
+
+\begin{funcdesc}{kvdict}{**kwargs}
+  Returns a dictionary keyed on objects and values.
+
+  Writing \code{kvdict(a=1,b=3)} is basically equivalent to \code{\{a:1,b:2\}}.
+
+  \begin{verbatim}
+>>> a = 5
+>>> b = "test"
+>>> kvdict(a=1,b=3)
+{5:1,"test":3}
+  \end{verbatim}
+
+
+  The key values must be in the namespace, otherwise a
+  \exception{NameError} is raised. A \exception{TypeError} is raised
+  if an object is not a hashable dictionary key.
+\end{funcdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Constructing subscripts}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+The subscript (\code{subscr}) object is a syntax convenience object
+for constructing Python subscripts.  Rather than using the
+\class{slice(start,stop,step)} constructor, as in
+\begin{verbatim}
+  sl = [slice(1,4),slice[4,4]]
+\end{verbatim}
+with the \code{subscr} object, one may write
+\begin{verbatim}
+  sl = subscr[1:4,1:4]
+\end{verbatim}
+This is useful for building slices objects for \module{simp} constructs that
+expect them.
+
+%Normally, one will slice a slice using square bracket notation on 
+%a signal.  However, when passing slices to STEP ops, one needs a 
+%way to construct slices without indexing a signal. One may do this with
+%the \class{i_slice} object. 
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Image array helpers} \label{sec:imgarrayhelper}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+SIMP provides some helper functions for manipulating images in
+by \class{NumArray} objects. 
+
+The expected image format for a 2D image array is a \class{NumArray}
+of type \code{UInt8}. 0 is the lowest intensity and 255 is the
+highest.  If the array is two dimensional, it represents a Y,X
+grayscale image.  If the array is three dimensional, the least
+significant index is for the color chanel.  
+
+The simp helper function \function{arraytopnm} can be used
+to create portable pixmap and portable graymap image strings 
+(\file{ppm}/\file{pgm}). One may save such a string to a file and 
+thereby create a \file{ppm} or \file{pgm} file.
+
+% XXX decide if permanent
+%\begin{funcdesc}{benchmark_rule}{rule,Niter=100}:
+%  Benchmark a rule, returning the number of sites updated per second
+%\end{funcdesc}
+%
+% XXX decide if permanent
+%\begin{funcdesc}{benchmark}{func,Niter=100}:
+%  Returns the amount of time to call a function Niter times.
+%\end{funcdesc}
+
+\begin{funcdesc}{arraytopnm}{array,maxval=255}
+  Return portable anymap (\file{pnm}) image string from \var{array} and 
+  \var{maxval}.
+
+  The array must be a 2D RGB array (3D numarray giving with
+  \code{a[Y,X,color]} with color indexing RGB values), in which case a
+  portable pixmap (\file{.ppm}) file string is returned, or a 2D grayscale
+  array (\code{a[Y,X]} giving the grayscale value), in which case a portable
+  graymap (\file{.pgm}) file string is returned.
+
+  0 is the lowest intensity and maxval is the highest.
+  If values in the array are not in range 0 through \var{maxval}, the image will
+  not be output correctly. \var{maxval} must be greater than 1 and 
+  less than 65536.
+\end{funcdesc}
+
+The function is suitable for rendering images to a file, as in
+\begin{verbatim}
+  arr = rend()
+  ppm = arraytopnm(arr)
+  open("out.ppm","wb").write(ppm)
+\end{verbatim}
+
+A related function can be used to load arrays from image files. 
+
+\begin{funcdesc}{pnmtoarray}{pnmstr}
+    Return an \code{(array,maxval)} tuple constructed from a portable 
+    anymap (\file{pnm}) string.
+
+%    
+
+    \begin{note}Can't handle ASCII or portable bitmap 
+               (\file{pbm}) file pnm formats.
+    \end{note}
+
+    The string may only contain a single image. Raises a value error if the
+    string is not a binary \file{ppm} or \file{pgm} file. 
+
+    \code{maxval} is the saturation value for the image.
+    The resulting \code{array} is a 2D RGB array (3D numarray giving with
+    \code{a[Y,X,color]} with color indexing RGB values) if the string 
+    is a portable pixmap (\file{.ppm}) file string or a 2D grayscale array 
+    (\code{a[Y,X]} giving the  grayscale value) if the string 
+    was a portable graymap (.pgm) file string.
+
+    The type of the array depends upon \code{maxval} of the ppm file.
+    If \code{0<maxval<256}, its type is \code{UInt8}, otherwise its type
+    is \code{UInt16}. 
+\end{funcdesc}
+
+
+\begin{funcdesc}{magnify2d}{arr,mag,grid=0,out=None}
+    This function is used to magnify the two most significant dimensions
+    of an image array, \var{arr}. 
+
+     \var{mag} is a non-zero integer scaling applied applied
+     in the two most significant dimensions of \var{arr}.  \var{grid}
+     is the size of the grid lines separating blocks.  The \var{out}
+     array will receive the result. By default a new output array is created.
+
+     If \var{mag} is negative, the output array is `decimated' and
+     only elements at strides of $-$\var{mag} are kept. 
+
+     If the shape of the input array is $(200,100)$ and
+     \var{mag} is 3, and \var{grid} is 0, the output array
+     will be of size $(600,300)$ and each pixel in the original array
+     will be expanded to $3\by 3$ blocks 9 new pixels. If
+     \var{grid} is 1, the blocks will be $2\by 2$, there will be a
+     spacing of 1 between each block and the output array size is
+     $(601,301)$.  The extra space is for the grid line at the edge.
+
+     Normally the grid lines have an intensity of zero.  To specify a 
+     different color for the grid lines, supply an output array that's 
+     already filled with the desired color. 
+\end{funcdesc}
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%\subsection{Declaring colors} \label{sec:declarecolors}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%The outputs of a rendering rule are \class{UInt8}
+%\class{OutSignal} objects.  
+%
+%A user may declare them with something like
+%\begin{verbatim}
+%red,green,blue = map(OutSignal,[UInt8]*3)
+%rgb = (red,green,blue)  
+%\end{verbatim}
+%% white          = AssignmentBundle(red,green,blue)
+%%where the \code{white} \class{SignalBundle} can be used to set the output
+%%values of the \code{red}, \code{green}, and \code{blue} simultaneously. 
+%
+%%\begin{verbatim}
+%%red,green,blue,white,alpha = map(OutSignal,[UInt8]*5)
+%%grayscale = (white,white,white)  
+%%rgb = (red,green,blue)  
+%%rgba = (red,green,blue,alpha)
+%%\end{verbatim}
+%
+%
+%Since this declaration is such a common one, \module{simp} provides 
+%a special method for making these declarations.
+%
+%\begin{funcdesc}{declarecolors}{generator=None}
+%   Convenience function for declaring a commonly used set of color
+%   signals as \class{UInt8}-type \class{OutSignal} objects in the
+%   global namespace.
+%
+%   The \var{generator} is the generator matrix for these signals. 
+%
+%   Basically, it acts as a macro for the following code which declares 
+%   all of the commonly used color \class{OutSignal} objects:
+%
+%\begin{verbatim}
+%# declare all the color outputs that one might use
+%red,green,blue,white,alpha = map(OutSignal,[UInt8,generator]*5) 
+%grayscale = (white,white,white)  # convenience for grayscale RGB images 
+%rgb = (red,green,blue) # convenience for RGB images
+%rgba = (red,green,blue,alpha) # convenience for RGB images with transparency
+%\end{verbatim}
+%
+%    One of the output tuples is usually passed as an argument to
+%    a \class{Renderer} object.
+%
+%   Will raise a \exception{NameError} if \code{red}, \code{green},
+%   \code{blue}, \code{alpha}, \code{white}, \code{rgb}, \code{rgba},
+%   or \code{grayscale} is already defined.
+%   
+%\end{funcdesc}
+%
+%
+%
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{\class{NumArray} helper functions} \label{sec:numarrayhelper}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+\begin{funcdesc}{makedist}{shape,dist}
+  Return a new \module{numarray} with a given \var{shape} and
+  distribution of values.
+
+  \var{shape} is a vector giving the shape of the array, while \var{dist}
+  gives the ratios of the integer values to be generated. 
+
+  For example
+  \begin{verbatim}
+  makedist((4,4),[1,3,5])
+  \end{verbatim}
+  returns a $4\by 4$ array in which elements have a $1/9$ chance of 
+  being 0, a $3/9$ chance of being 1 and a $5/9$ chance of being 2.
+
+  Use \function{SeedRandom} to seed the random number generator. 
+
+\end{funcdesc}
+
+\begin{funcdesc}{getdist}{arr,min,max}
+  Return the distribution of values between min and max of an integer array.
+
+  The primary use is to get distributions of signal states.
+
+  \var{arr} is the array to be examined. \var{min} is the minimum value for 
+  the histogram while \var{max} is the non-inclusive maximum value of the range.
+
+\begin{verbatim}
+>>> arr = numarray.array([1,2,2,2,1,1,2,3,3,0])
+>>> getdist(arr,0,3)
+[1,3,4]
+\end{verbatim}
+
+  For efficiency, should only be called on small ranges of values. 
+\end{funcdesc}
+
+\begin{funcdesc}{ellipsemask}{shape}
+  Return a 2D mask of values indicating the interior of an ellipse.
+
+  \var{shape} is the desired shape of the mask array. 
+
+  The major axes of the ellipse are Y-1,X-1 where shape=Y,X.  The
+  goodness of the discrete ellipse approximation is dependent on the
+  shape.  Odd number sizes are typically more accurate
+  than accurate than even.
+
+  The mask is suitable for use with the \module{numarray}  
+  \function{putmask(array,mask,values)} function. 
+  
+  \begin{note}
+     This method can currently only be used to create 2D ellipses. We hope
+     to extend it to ellipses in arbitrary numbers of dimensions in the future. 
+  \end{note}
+\end{funcdesc}
+
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%\section{Geometry: grid, coordinates, and lattices} \label{sec:grid}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+%First we introduce the grid, coordinates, and the basics of lattices,
+% and then we discuss related issues in more depth.  
+
+
+%Relative coordinate vectors represent neighbor offsets in rules and
+%shifts applied to lattices.  Absolute coordinate vectors select
+%lattice points and lattice regions.  
+
+
+%The grid is an integer coordinate space in which the parallel
+%declarations of data and processing live. The parallel declarations
+%are on \emph{lattices}---regularly spaced, repeating subsets of the
+%grid.  
+
+
+%When writing ordinary CA rules on orthonormal lattices---the
+%default special case of SIMP's more general geometric facilities---one
+%may ignore the remainder of this section.  For non-orthogonal
+%lattices, partitioning cellular automata, and lattice gases a full
+%understanding of SIMP's geometric facilities is more important.
+% ---the grid, coordinates, andlattices---
+
+%Lattices are spatially repeating, regular of these declarations.  For
+%numerical and other reasons, all coordinate and lattice declarations
+%are limited to grid points---that is, they must be integers.  However,
+%by means of SIMP's scaling mechanisms, one may conveniently use scaled
+%rational coordinates.
+
+
+% (We also plan add other types of boundary conditions such as 
+% --------------------------------
+
+% --------------------------------
+% One can think of them as an ordered subset of the points of the grid
+
+
+
+% Both data (\class{Signal} objects) and \class{Rule} processors (events)
+% are defined on lattices on the grid.  In specifying operations, it is 
+% useful to shift the origin of these lattices with respect to the origin
+% of the grid.  The \class{Shift} operation does exactly this.  When a 
+% lattice is coarser grained than the grid---technically speaking, 
+% when it is a sublattice of the grid---shifting may move the position 
+% of a lattice by a fractional portion of its size.  Since the sites of a 
+% lattice are identical, the only data that need be maintained in the 
+% position register is the coordinate position modulo the dimension sizes
+% of the lattice.
+% 
+% STEP and SIMP use the various parts of the HNF generator matrix in
+% different ways.  We call the diagonal vector the \emph{rectangular}
+% generator elements of a lattice.  We call the off-diagonal elements
+% the \emph{skew} generator elements.  The rectangular elements implicitly give
+% a \emph{rectangular unit cell} that is used substantially in slicing,
+% selecting and indexing lattice points.  Specifically, slices
+% (typically, they are rectangular regions) be multiples of this
+% rectangular unit cell.  This constraint guarantees that a slice will
+% contain the same number of lattice points no matter where it begins and
+% no matter the current position of the lattice.
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Declaring and using \class{Signal} objects}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\declaremodule{standard}{simp.step}
+\modulesynopsis{The space-time event processing interface.}
+\moduleauthor{Ted Bach}{tbach@bu.edu}
+
+
+In this section, we describe \class{Signal} constructors
+and semantics of \class{Signal} methods and member data.  In
+particular, we describe how signal objects are declared and used,
+their possible data types, neighbor indexing and slicing (slice
+objects).
+% STEP operations are defined with respect to signals. 
+\class{Signal} objects provide an abstract interface to parallel data
+allocations that ultimately exist and are managaded entirely inside of a 
+STEP.  
+
+
+
+% 
+%  actions on and computations with respect are implemented by a STEP.
+% The STEP interface has a means for declaring and allocating signals
+% and a means for performing operations on them.
+% 
+% We first discuss signal allocation. 
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Declaring \class{Signal} objects}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+Declaring a signal entails specifying the lattice it's allocated on
+and the type of data it holds.  Signals are indexed using
+multidimensional subscripts. Subscripting a signal implicitly calls
+\method{__getitem__} which returns a reference to
+a \class{SignalRegion} which can be used to read and write values in
+an absolute, global context and inside \class{Rule} declarations to
+access and set signal values in a relative, local context.
+% \class{AssignmentBundle} objects bundle several signals and are used
+% to combine signals into a bundle whose values can be set
+% simultaneously. 
+Special \class{OutSignal} objects declare
+output-only signals whose state information is not maintained in a
+STEP, but are rather used for reading output values rendered by local
+rules.
+
+%In short, declaring a signal entails specifying the lattice they're
+%allocated on and the type of data that they hold.  
+%
+%Signals are indexed using coordinate and slice arguments to
+%\method{__getitem__}.  Indexing a signal returns a reference to a
+%\class{SignalRegion} which can be used to read and write values in an
+%absolute global context and inside \class{Rule} declarations to access
+%and set signal values in a local relative context.
+
+% XXX document the ways of expressing a generator matrix.
+
+Both \class{Signal} and \class{Rule} objects subclass \class{LatticeArray} 
+which is the base class for representing lattices. 
+
+\begin{classdesc}{LatticeArray}{generator,size}
+   Base class for representing lattice declarations on the grid. 
+
+   \var{generator} is a HNF lattice generator matrix (see XXX) defined on
+   a rectangular integer grid bounded in each dimension by \var{size}. 
+
+
+   {\bf Read-only attributes}
+
+   \begin{memberdesc}{generator}
+     The generator matrix for the lattice.
+   \end{memberdesc}
+
+%   \begin{memberdesc}{igenerator}
+%     The inverse of the generator matrix
+%   \end{memberdesc}
+
+   \begin{memberdesc}{spacing}
+     The orthogonal spacing between cell sites. 
+     (Diagonal of the \member{generator}.)
+   \end{memberdesc}
+
+   \begin{memberdesc}{nd}
+     Number of dimensions.
+   \end{memberdesc}
+
+   \begin{memberdesc}{shape}
+     shape of the array.  Basically, its the \member{size} divided 
+     by the \member{spacing}.
+   \end{memberdesc}
+
+   {\bf coset functions}
+
+   The following two functions read and write the starting position
+   registers from the STEP.
+
+   \begin{methoddesc}{getcoset}{}
+      Return the coset for the object as described in \secref{sec:position}.  
+      (Wrapper for \class{GetCoset})
+   \end{methoddesc}
+
+   \begin{methoddesc}{setcoset}{coset}
+      Set the \var{coset} vector of the
+      lattice as described in \secref{sec:position}.  
+      (Wrapper for \class{SetCoset})
+   \end{methoddesc}
+
+   {\bf geometric helper functions}
+
+   These are more likely to be more useful to STEP than to the user.
+
+   \begin{methoddesc}{array_index}{coord,out=None}
+     Return the rectangular array index of a grid \var{coord}.
+
+     Write to the vector \var{out} if it is specified.
+   \end{methoddesc}
+
+   \begin{methoddesc}{coset_coord}{coord,out=None}
+      Return the rectangular coset coordinate of a coordinate modulo the 
+      lattice.
+   \end{methoddesc}
+
+   \begin{methoddesc}{coord}{index,out=None}
+      Return the grid coordinate associated with the array \var{index} vector.
+   \end{methoddesc}
+
+\end{classdesc}
+
+% XXX mention types of arrays associated with the signal types.
+
+\begin{classdesc}{Signal}{type,generator=None,simp=None}
+
+   Declares a parallel data allocation of type '\var{type}'
+   on the lattice declared by the \var{generator} matrix. If not
+   specified, the generator taken from the \var{simp} module's default
+   value.  
+
+   This class extends \class{LatticeArray} and therefore has the same
+   methods and attributes. 
+   (The size parameter of the \class{LatticeArray} is obtained from
+   \module{simp})
+
+   \begin{note}
+     The user need not specify the SIMP argument since 
+     \module{simp} provides a wrapper function for the 
+     \class{Signal} constructor that automatically specifies it. 
+   \end{note}
+
+
+
+%   \var{simp} --- Usually this need not be specified. It gives the
+%   SIMP (and STEP) instance to associate with this Signal. It need not
+%   be specified explicitly if one uses '\code{from SIMP import *}'
+%   otherwise, the constructor will raise an error. [what type?]  (When
+%   one does not use SIMP, a STEP object can be passed directly to the
+%   constructor using the \var{step} parameter instead).
+
+
+
+   {\bf Read-only members}
+
+   \begin{memberdesc}{type}
+      the type of the signal. 
+   \end{memberdesc}
+
+%   \begin{memberdesc}{shape}
+%     shape of the array representing the signal.
+%   \end{memberdesc}
+%
+%   \begin{memberdesc}{generator}
+%     shape of the array representing the signal.
+%   \end{memberdesc}
+
+   {\bf Methods}   
+
+   \begin{methoddesc}{value}{}
+     Return the entire array for the signal as a \class{numarray}. 
+
+     When called from a \class{SignalRegion}, as in 
+     \samp{sig[:,4:5].value()}
+     it returns the array for the signal at the slice.  The type of
+     the array depends on the signal type.
+
+     (Wrapper for the STEP \class{Read} operation)
+   \end{methoddesc}
+
+   \begin{methoddesc}{__getitem__}{subscript}
+     Returns a \var{SignalRegion} with a region specified by the 
+     \var{subscript}.  
+
+     A \class{SignalRegion} can be used in transition-functions 
+     and for reading and writing data. 
+   \end{methoddesc}
+
+   \begin{methoddesc}{__setitem__}{subscript,value}
+     Assigns the \var{value} of a region specified by the \var{subscript}. 
+
+     If the \var{value} is a scalar, all elements in the 
+     region are assigned to that value. Otherwise, if it is an array,
+     elements are assigned to array values.  Arrays sizes must match the
+     shape of the region.  (Wrapper for the STEP \class{Write}
+     operation)
+   \end{methoddesc}
+
+   {\bf Back-end functions} 
+
+   These have lesser significance to the user.
+   
+   \begin{methoddesc}{base_signal}{}
+       Return a reference to self.
+
+       Only defined so that one can handle \class{Signal} and 
+       \class{SignalRegion} objects in a homogenous way.
+   \end{methoddesc}
+
+   \begin{methoddesc}{neighbor_offset}{}
+     Returns an $n$ dimensional zero vector. 
+
+     Only defined so that one can handle \class{Signal} and 
+     \class{SignalRegion} objects in a homogenous way.
+   \end{methoddesc}
+
+
+\end{classdesc}
+                  
+% -=-=-=-=-=-=-=-=
+\subsubsection{Signal Types}
+% -=-=-=-=-=-=-=-=
+
+Currently, the primary type is the \class{SmallUInt}. This type is
+parameterized on the number of values it may take on.  One must call
+the \class{SmallUint} constructor to instantiate the type.
+
+\begin{classdesc}{SmallUInt}{n=2}
+  The STEP parameterized small unsigned integer type.  It can take on
+  $n$ possible values from 0 to \code{n-1}. The value of \code{n} should be 
+  less than or equal to 256. When \code{n=256} \code{UInt8} is a better 
+  choice. 
+
+%  Coerces to a \module{numarray.UInt8} short unsigned integer type. 
+
+%  A STEP implementations may require that $n$ be a power of 2. 
+\end{classdesc}
+
+Currently, the only\fnmark other type is \class{numarray.UInt8} and it 
+may only be used for \class{OutSignal} objects.  It is used for 
+RGB and grayscale rendered color output signals. 
+\fntext{
+As soon as we have an efficient STEP that can support them, we will
+add the rest of the \class{numarray} types.  To do this, however, we
+will need to add a Python to {\tt C} code compiler to SIMP capable of
+converting transition-functions directly to {\tt C} functions.  We
+believe that the \module{scipy.weave} or \module{pyinline} package
+will be a good way to do this.}
+ 
+%\begin{classdesc}{ShortUnsignedFraction}{}
+%  Short Unsigned fraction in the range [0,1].
+%\end{classdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Reading and writing values and using slices} 
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+At the level of the STEP interface, a signal's data is managed by the STEP
+itself and can not be directly accessed.  Instead, the data is 
+read and written through \class{Read} and \class{Write} operations,
+and updated using \class{Rule} operations.  For convenience, however,
+\class{SignalRegions} objects, which may be obtained by subscripting 
+\class{Signal} objects can be used to represent the data in a region.
+A \class{SignalRegion} may also serve as a wrapper for \class{Read} 
+and \class{Write} operations.  
+
+[XXX Need some slicing examples or to reference some from the tutorial.]
+
+
+% A region of a signal is written by using
+% \method{__setitem__} (ie. square brackets) A region is read by calling
+% \method{__getitem__}, which returns a signal region and can then be
+% used to read the signal into an array (a new array that holds a copy
+% of the data).
+% 
+% At their core, reading and writing values require constructing step
+% objects that perform the reading and writing.  A signal knows which
+% runtime it was allocated with and issues operations to that runtime.
+
+
+\begin{classdesc}{SignalRegion}{signal,subscript}
+   Obtained by subscripting a \class{Signal}. 
+
+   It references a \var{signal} at a specific \var{subscript}.  The 
+   \var{subscript} can be a Python subscript or a \var{Region} object.
+   (see \function{i_slice} and \class{Region}).   
+
+   If the subscript is a single point, the value can be coerced to an
+   \code{int} or array.  Otherwise, it can only coerce to an array.
+
+   To write to a \var{SignalRegion}, one can assign the value of the
+   output attribute, '\code{_}' as in
+   \begin{verbatim}
+     sigregion = sig[:,4:4]
+     sigregion._ = 1
+   \end{verbatim}
+   Doing this calls a STEP \class{Write} operation.
+
+   {\bf Member data (read only)}
+
+   \begin{memberdesc}{region}
+     The \class{Region} object for this subscript.
+   \end{memberdesc}
+
+   \begin{memberdesc}{shape}
+     The shape of the array associated with the \member{region}.
+   \end{memberdesc}
+
+   {\bf Methods}
+
+   Calling \method{value()} returns the value or array of values 
+   associated with this region. 
+
+   \begin{methoddesc}{value}{}
+      For this region return the value as a scalar or array of values 
+      as a \class{NumArray}. 
+     
+
+%     If the subscript references a single coordinate, it returns a scalar.
+%     (Wrapper for the STEP \class{Read} operation)
+    \end{methoddesc}
+
+% XXX perhaps revive this
+%   \begin{methoddesc}{int}{}
+%       Return the integer associated with the subscript. 
+%
+%       The subscript must be a single coordinate, otherwise 
+%       an array is needed to hold the values and a \exception{ValueError}
+%       is raised.
+%   \end{methoddesc}
+
+
+   \begin{methoddesc}{base_signal}{}
+       Return a reference to the \class{Signal} of which this is a
+       region selection.
+   \end{methoddesc}
+
+   \begin{methoddesc}{neighbor_offset}{}
+     Return a single coordinate specifying the neighbor offset.  Raises 
+     an error if the region contains more than one site. 
+   \end{methoddesc}
+
+\end{classdesc}
+
+A \emph{neighbor} is a \class{SignalRegion} that references a single 
+coordinate. Neighbor slices are used to write cellular automata rules.
+
+
+% [Currently most of the constructs only accept slices without
+% steps. Later, we will define a more general slice that specifies
+% \code{start}, \code{stop}, a stepping lattice \code{step_lat} and a
+% \code{cell}.]
+
+\begin{classdesc}{Region}{region}
+    A class for representing multidimensional slices.
+
+    The constructor expects \var{region} to be a \class{Region} object 
+    or a multidimensional Python subscript.
+
+    {\tt Member data (read-only)}
+
+    \begin{memberdesc}{start}
+         start position for the region (vector)
+    \end{memberdesc}
+
+    \begin{memberdesc}{stop}
+         stop position for the region (vector)
+    \end{memberdesc}
+
+    \begin{memberdesc}{size}
+       The size of the region (stop-start). Returns \code{None} if 
+       the size is undefined because the size of the boundary is not
+       known.
+    \end{memberdesc}
+
+    {\tt methods}
+
+    \begin{methoddesc}{subscript}{}
+        Return a Python list representing the region's subscript
+    \end{methoddesc}
+
+\end{classdesc}
+
+\begin{classdesc}{LatticeArrayRegion}{region}
+    A class for representing multidimensional slices selecting 
+    the sites of a \class{LatticeArray} object. 
+
+    Extends the \class{Region} class. 
+    
+    {\bf member data (read-only)}
+    \begin{memberdesc}{shape}
+      The shape of the array representing the region. 
+    \end{memberdesc}
+
+
+\end{classdesc}
+
+
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% \subsection{Signal Assignment Bundles}
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% 
+% \begin{classdesc}{AssignmentBundle}{signals}
+% 
+%     Make an ordered bundle of signals from a list of \var{signals} ---
+%     list of \class{Signal}, \class{OutSignal} and neighbor
+%     \class{SignalRegion} objects in order to simultaneously assign output
+%     values for the members of the bundle.
+%   
+%     \begin{memberdesc}{_} 
+%           Output value of an assignment bundle. Assigns all signals in the 
+%           bundle to a single value.  Can only be assigned values within 
+%           a rule function. 
+%     \end{memberdesc}
+% 
+% %    \begin{memberdesc}{all_}   
+% %       set all signals to the same value [may be a problem if they 
+% %              are of different types.]
+% %    \end{memberdesc}
+% 
+% %    SIMP may need to verify that all of the signals in the collection come 
+% %    from the same SIMP instance.
+% 
+% \end{classdesc}
+
+% Signal regions can also be read and written using \function{Read} and 
+% \function{Write} operations.
+
+%An alternate strategy is to read the region with the __getitem__ 
+%method and then call the read or write method with an array as 
+%an argument.  An optional notification function can be passed 
+%to a read or write operation when a non-blocking call is desired.
+% 
+% Non-blocking writes are useful when one would like to avoid having
+% to make an extra copy of the array.  Non-blocking reads are useful
+% when one would like to receive notification when the array values 
+% have been read out into the output array.
+
+% All reads require an output array. If one is not specified, an 
+% appropriately sized array is created on-the-fly.
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Output signals}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+A special kind of signal, called an \class{OutSignal} can be used for
+rendering purposes.  One would often like to apply a rule to do a
+rendering operation.  If one used regular signals to hold the output
+values and then read the values out of these signals, extra storage
+would be needed---internal storage for the signals and an external
+array for the output data.  In addition, an extra copy would be
+needed---a copy from the signal to the output array.
+Two copies must be kept, because, it is assumed that signals will be
+used again as inputs to future rules.
+
+If one instead declares a special output signal, a STEP can realize
+that it the output signal will only be written and avoid keeping an
+extra copy around---and the data can be written directly to the
+output.
+
+\begin{classdesc}{OutSignal}{type,generator=None,simp=None}
+   A signal that is used as an output only.
+
+   It is the same as an ordinary signal in all ways except that it is 
+   output only.
+
+   \class{OutSignal} objects are used in rendered \class{Read} operations.
+
+%   Use this in the same way as a regular signal. It is identical, except 
+%   that it can only be used as an 
+\end{classdesc}
+
+
+% --------------------------------
+% \begin{classdesc}{GlobalSignal}{type}
+%    New global signal that is read by rules in the same way everywhere. 
+%    
+%    Values range from 0 to 1-\var{period}. Wraps around after period.  Can 
+%    be read and written like a normal signal. 
+% \end{classdesc}
+
+% CombinedOutSignal
+
+% Candidate Objects
+% 
+% \classdesc{InputSignal}{type,lattice,boundary_type,scale}
+%    Similar to 
+% \end{document}
+% 
+%   ConstantSignal   (single assignment)
+%       Useful for making spatially variant behavior
+%       -> index constants, etc.
+% 
+%   TemporalPhase Pseudosignal  
+%       Alternating value.
+% 
+%   PhaseSignal
+%       __init__(T=0)
+%       set(T)
+%       inc()
+%       
+%   SpatialPhase Pseudosignal  (single assignment)
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{STEP operations} \label{sec:stepops}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+STEP operations (ops) are represented by Python classes. They must
+be declared before they can be used.  An op is \emph{declared} by calling its
+class constructor and \emph{issued} by calling it (as in \code{op()}) or
+by passing it as an argument to the STEP \function{Do} function (as in
+\code{Do(op)}). 
+
+% All the op constructors, have a keyword \var{simp} parameter which specifies
+% the \module{simp} instance they should use for getting default values
+% and the STEP instance that the op is associated with.  (When one does
+% not use SIMP, a STEP object can be passed directly to the constructor
+% using the \var{step} parameter).  For clarity, this default argument
+% is not shown in the documentation below.
+
+% Furthermore, the documentation says that some of the default values
+% for operations come from \function{simp_init}.  SIMP achieves this by
+% defining constructor functions for the operations that check the
+% parameters.  SIMP also automatically supplies the constructor with a
+% reference to the STEP run-time initialized with \var{simp_init}.
+
+%\begin{note}
+%   When determining the type of a step operation one should use
+%   \code{isinstance(op,simp.<op>)} rather than
+%   \code{isinstance(op,simp.<op>)}. This is because the \module{simp}
+%   module declares simplified constructor functions for STEP
+%   operations, and not the classes themselves.  The \module{simp.step}
+%   module declares the STEP classes.
+%\end{note}
+
+An op's constructor automatically registers it with the STEP\fnmark.
+This is done so that the STEP may raise an exception if the op is
+somehow invalid or a \exception{StepError} if for some reason it is
+unable to perform the op.  The STEP may also perform some internal
+compilation in order to be ready to do the op later.
+
+\fntext{Internally it uses the \method{step.Register(op)}
+method. \class{Signal} objects are also registered in the same way.}
+
+%In the first case, the possible
+%exceptions are listed in the op constructor documentation below.  In
+%the latter, a \exception{StepError} is raised.
+
+\begin{excclassdesc}  {StepError}{}
+   Base class for STEP exceptions.  STEP will put relevant information in
+   the exception's string. 
+\end{excclassdesc}
+
+% --------------------------------
+\subsection{Rules}
+% --------------------------------
+
+\begin{note}
+  Because the current STEPs use lookup tables (LUTs) to implement rules,
+  one should be careful not to make the number of input signals too
+  large.
+\end{note}
+
+
+The rule function must follow some special restrictions.  A STEP may
+not enforce these restrictions, but as the writer of a STEP function,
+one should be certain that they are upheld, otherwise unexpected results
+may arise.
+
+In general, a rule should be written as a simple aritmetic and logical
+function of neighbors using only simple flow control primitives. 
+
+\begin{itemize}
+  \item A rule may not 'carry' values.  (it may not write a global
+     value and expect to re-read that global in the next iteration).
+  \item No `time variant' function calls.  All external functions called 
+     must be strictly deterministic---given a set of input values,
+     it should always return the same set of outputs. 
+%  \item Inlined functions.  If one would like to alter signal values 
+%     using sub-functions, the function call must be explicitly inlined with 
+%     \function{inline}. Currently, inlined functions may not have parameters
+%     and the same global namespace is shared among inlined functions and 
+%     rules.
+  \item No exceptions. The rule may not use \code{try} statements or raise
+     exceptions. 
+\end{itemize}
+
+In addition to these rules, a STEP (especially one that generates C code)
+may enforce the following
+\begin{itemize}
+   \item Single type. A local variable may only be assigned to a single type
+     within the rule
+   \item Restricted allowable function calls.  Some function calls may
+     be difficult for the STEP to implement or analyze. A STEP might not allow
+     function calls at all or only allow a fixed subset of them.
+   \item Python construct restrictions.  Try to use only simple python 
+     constructs. 
+   \item Limited types. Mutable types such as lists may be prohibited.  
+\end{itemize}
+
+
+
+\begin{classdesc}{Rule}{rule_function,generator=None,context=\{\}}
+    A STEP operation that performs parallel, local updates.
+
+    A \class{Rule} updates signals in parallel by locally applying
+    \var{rule_function} at the sites of the lattice specified by 
+    its \var{generator}.  If the \class{context} dictionary is defined,
+    names in override names in the global context. 
+    
+
+    The \class{Rule} class extends the \class{LatticeArray} class and
+    thus all of its attributes and methods.
+
+    When a \class{Rule} is instantiated, its context is frozen; 
+    global names in the \var{rule_function} are bound to the values they
+    had at the time that the \class{Rule} was created.  A frozen global context
+    is necessary to allow a STEP to perform type
+    analysis on the Python \var{rule_function}, determine the
+    \method{input} and \method{output} signals, and compile a LUT to
+    represent the function.  A new private context for the
+    \class{Rule} is created and mutable objects are copied with a deep
+    copy.  Once the globals have been strobed, the internal
+    representation of the \var{rule_function} is no longer affected by
+    changes made to global variables.
+
+    Names in \var{context} dictionary supersede the the
+    \var{rule_function}'s globals, allowing one to construct
+    parameterized rules.
+
+    When a \class{Rule} is strobed, it constructs the function's
+    \member{inputs} and \member{outputs}.  All regions referenced
+    inside of the \var{rule_function} are relative to the site being
+    updated---signal subscripts with a single coordinate specify
+    neighbors.
+
+
+
+    \begin{memberdesc}{inputs}
+      The \class{Signal} and \class{SignalRegion} objects accessed as 
+      inputs by the \member{rule_function}.
+    \end{memberdesc}
+
+    \begin{memberdesc}{outputs}
+      The \class{Signal}, \class{SignalRegion}, \class{OutSignal}
+      objects written by the \member{rule_function}.
+    \end{memberdesc}
+
+    \begin{memberdesc}{name}
+      The name of this object.  Taken from \member{rule_function.__name__}.
+    \end{memberdesc}
+
+\end{classdesc}
+
+\begin{classdesc}{LutRule}{lut,inputs,outputs,generator=None}
+
+    A STEP \class{Rule} with a transition-function specified by a lookup-table.
+
+    \var{inputs} is an in-order list of the
+    \class{Signal}/\class{SignalRegion} inputs to the \var{lut} and
+    \var{outputs} is an in-order list of the \class{lut} outputs. The
+    \var{lut} itself is an $m+1$ dimensional array indexed in the
+    upper $m$ dimensions in-order by the inputs and in the lowest
+    dimension by the index of the output. The type of the array must
+    be compatible with all of the output values. (Usually, a
+    \class{UInt8} array is the right choice.)  
+
+    The input values must be unsigned.
+
+    XXX not yet implemented
+
+\end{classdesc}
+
+%    bind_external()
+%
+%       Bind external signals to input/output arrays.
+%       
+%       Use name=value keyword arguments to set the external
+%       array to be used.
+%
+%       Raises an IndexError if the array is not big enough.
+
+% --------------------------------
+\subsection{Moving the lattice}
+% --------------------------------
+
+
+\begin{classdesc}{Shift}{shifts}
+  STEP operation that shifts the position of \class{LatticeArray} objects.
+
+  \var{shifts} is a dictionary keyed \class{LatticeArray} objects and 
+  mapping them to shift vectors. 
+  
+
+%  Shift the position of lattice objects (\class{Signal}s and
+%  \class{Rule}s) by the amounts specified in the \var{shifts}
+%  dictionary.  The dictionary is keyed on lattice objects and contains
+%  (pitch-scaled) coordinate vectors describing the amount of each
+%  shift.
+
+  For \class{Signal} objects, the data in the lattice is moved by by
+  the amount of the shift.  (However the movement may simply be an
+  update an internal address register that says where the data is the
+  next time it is needed.)  After a shift, the lattice's start
+  position moves to a new location (modulo the lattice generators) as
+  described in \secref{sec:position}.  Because the sites of their
+  lattice are undifferentiated, this is all that happens for \class{Rule}
+  objects.
+
+
+
+
+\end{classdesc}
+
+\begin{classdesc}{Shuffle}{objects}
+  STEP operation that randomly shuffles \class{LatticeArray} object 
+  positions.
+
+  \var{objects} is a list of \class{LatticeArray} objects to shuffle.
+
+  Shuffling \class{Signal} objects, performs a mild permutation
+  of the array elements and randomizes its starting position.  It is
+  usually implemented by a by a random shift.   Shuffling data is 
+  much more efficient than generating high quality randomness, and 
+  is often sufficient to achieve the same effect. 
+
+  A \class{Rule} does not have data. Shuffling a \class{Rule} just
+  randomizes its starting position.
+
+%  Shuffling a \class{Rule} randomizes its coset position.
+
+%   This operation may not always be available.
+\end{classdesc}
+
+
+%\begin{classdesc}{SetCoset}{locations}
+%    
+%
+%    Operation puts \class{Signal} and \class{Rule} lattices in a new
+%    starting location specified by the dictionary \var{locations}. The
+%    operation is similar to a shift, but moves the lattice of a signal
+%    or rule to an absolute, rather than relative location.
+% 
+%    The \class{Put} operation does not move data far---rather it just
+%    changes the start location to a new value.  If the new location
+%    gives the new position modulo the lattice generators as described
+%    in \secref{sec:position}.
+%
+%    Use \class{GetCoset} or the \class{position()} method to get the 
+%    current position of a lattice object. 
+%
+%%    Either specify the location or where the location should be found as in
+%%    \begin{verbatim}
+%%      Place(q=p)   # put q where p is
+%%    \end{verbatim}
+%%
+%%    # Another alternative:  Put(q=p.get_offset)
+%%    #   Note, STEP can call the bound method returned by get_offset to get
+%%    #   the current offset.  It can also predict the offset by looking at 
+%%    #   the class that it came from by examining offset_func.im_self
+%\end{classdesc}
+
+\begin{classdesc}{GetCoset}{lattice_object}
+       When called, returns the starting position of a \class{LatticeArray}
+       (\class{Rule} or \class{Signal}.
+
+       A STEP operation is required for this since the STEP maintains 
+       the starting position of its \class{Rule} and \class{Signal} objects. 
+
+       Usually, one will use the \method{GetCoset()} wrapper method of 
+       \class{Rule}, \class{Signal}, and \class{OutSignal} objects to 
+       call \class{GetCoset}.
+       
+       \begin{memberdesc}{object}
+          The object whose position is to be read.
+       \end{memberdesc}
+\end{classdesc}
+
+\begin{classdesc}{SetCoset}{positions}
+     Set the starting positions of a set of \class{LatticeArray} objects. 
+
+
+     \var{positions} is a dictionary keyed on \class{LatticeArray} objects
+     mapping each to its new starting position.  The starting position 
+     is a vector or another \class{LatticeArray} object, in which case the
+     new position is the same as the position of the object.
+
+     A STEP operation is required for this since the STEP maintains 
+     the starting position of its \class{Rule} and \class{Signal} objects. 
+
+\end{classdesc}
+
+
+% --------------------------------
+\subsection{Input and output operations}
+% --------------------------------
+\begin{classdesc}{Read}{region,signals,rule=None,samearray=0}
+%  param_func,return_call,
+     Read \class{Signal} and \class{OutSignal} data out to an array. 
+
+     The operation reads data from \var{signals}---a set of
+     \class{Signal} or \class{OutSignal} objects---within
+     \var{region}---a Python subscript or \class{Region} object---to
+     an output array.  If \class{OutSignal} objects are read, the
+     \var{rule} for generating them must be defined---otherwise it
+     need not be.  If \var{samearray} is true, all data is read out to
+     a single array, otherwise, data are read out to multiple
+     arrays---one for each signal.
+
+
+     Usually, a \class{Read} is generated and called by subscripting a
+     signal and calling the \code{array()} method, as in
+     \code{sig[1:14,:].value()}.  \class{Renderer} objects also
+     create and call \class{Read} operations on color
+     \class{OutSignal} objects with user specified rendering
+     \class{Rule} objects.
+     For non-orthonormal lattices, sites are packed into arrays 
+     following the site selection conventions of \secref{select}.
+
+%     \var{rule} --- used for \emph{rendered} reads it is an optional
+%     \class{Rule} object that must be defined if \var{signals}
+%     contains \class{OutSignal}s, otherwise it should not be. It is
+%     applied to get the value of any \class{OutSignal} read, it
+%     must only set \class{OutSignal} values.
+%
+%     \var{samearray} --- If set, try to return the signals all in the
+%     same array.  This requires that the lattices of the signals be
+%     the same size.  Raises a \exception{TypeError} if the signal
+%     types do not allow this, or the signals are on different
+%     lattices.
+     
+
+      The output values are read out to an array or list of arrays when
+      the operation is called. 
+
+      \begin{methoddesc}{__call__}{array=None}
+         Return an array (or list) containing the output values.
+
+         By default, a new array (or list of arrays) is allocated and
+         returned. If \var{array} is given, the output is placed there
+         instead.  If the \var{samearray} constructor parameter was
+         true, the results are compacted into a single array,
+         otherwise, they are returned as a list of arrays---one for
+         each signal.
+
+      \end{methoddesc}
+\end{classdesc}
+
+
+\begin{classdesc}{Write}{region,signals,values=None}
+       Write the values in \var{region} of each \class{Signal} in 
+       the \var{signals} list with the corresponding value from
+       the \var{values} list.  
+
+       One usually writes to \class{Signal} values using subscript
+       indexes. Behind the scenes, this allocates and calls
+       \class{Write} operations.
+
+       There are two flavors of writes. If \var{values} is specified
+       in the constructor, the write operation is static. Otherwise,
+       it is dynamic.  For a dynamic write, values must be specified
+       when the operation is called.
+
+       \begin{methoddesc}{__call__}{values=None}
+	  If the write is dynamic, \var{values} must be specified, otherwise
+	  they need not be.
+       \end{methoddesc}
+
+%       [In the future, we will add masking capabilities for writes.]
+\end{classdesc}
+
+
+
+
+% \begin{classdesc}{ReadRendered}{rule,slice,signals,param_func,return_func}
+%      Read a set of \var{signals} (must be of type \class{OutSignal}) 
+%      with values specified by \var{rule}.  
+% 
+%      Everything else is the same as \class{Read}.
+% \end{classdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+%\subsection{Internal Transfer operations}
+% \subsection{Experimental Operations}
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% 
+% [The jurry is still out on these operations.  They will not be implemented 
+% yet]
+% 
+% These operations can be used to connect regions in a non-local fashion.  
+% In particular, they can be used to implement a sparse random rewiring of 
+% the neighborhood graph.  To use these methods with a CA, one should program
+% that CA as a lattice gas. 
+% 
+% 
+% \begin{classdesc}{Transfer}{src,src_slice,dst,dst_slice}
+%      Transfer data between two signals at compatible locations.
+%     
+%      Basically, this is a combination of a read and a write.  Currently,
+%      it is not a proper STEP operation, but a read followed by a write. 
+% \end{classdesc}
+% 
+% \begin{classdesc}{Swap}{src,src_slice,dst,dst_slice}
+%      Swap data between two signals. 
+% \end{classdesc}
+% 
+% \begin{classdesc}{Flood}{slice,signals,value}
+%        Flood a set of signals with a single value. 
+% 
+%        [Perhaps flooding should be just a special case of the write operation.] 
+% \end{classdesc}
+
+% \begin{classdesc}{Randomize}{slice,signal,distribution=None}
+%        Randomize the value of a signal using a high quality random 
+%        number generator.  
+%     
+%        \begin{note} This operation will often be much more expensive than 
+%          other STEP ops.  To get a new random value at each site, 
+%          over a long run, one should initialize with \class{Randomize} 
+%          and subsequently \class{Shuffle}, or use cellular automata techniques
+%          for generating local random values. 
+%        \end{note}
+% 
+%        \var{distribution} --- a dictionary keyed on value and giving
+%        the relative proportion of signals taking that value. Defaults
+%        to a uniform distribution. 
+% \end{classdesc}
+
+%\begin{classdesc}{Reduce}{read,reduction_func,initial=None}
+%     Operation that reduces the signals given by a read operation to a
+%     value specified by \var{reduction_func}.  Returns the result when
+%     called.
+%
+%     \var{read} is a \class{Read} operation that specifies the signals to 
+%     be read and \var{function} is a STEP reduction function. 
+%
+%     \var{initial} is the initial value for the reduction. 
+%
+%     In the future, \var{reduction_func} will be a rule function that
+%     is iterated. 
+%     % to only apply the reduction function at a subset, define 
+%     % an extra output state and a mask. 
+%
+%%     After the reduce operation completes, it will call 
+%%     \function{returns}. The expected prototype for return function
+%%     \function{returns(op,value)}.
+%
+%     Currently, the only STEP reduction function supported is
+%     \var{DISTRIBUTION}.  It returns the distribution of the output
+%     variables as a numarray that is indexed on the possible values of
+%     the signals.  Should only be called on \class{SmallUInt} signals.
+%    
+%     [In the future, we plan to support numarray reduction functions as 
+%     perhaps Python style binary reduction functions. 
+%     We will also add masking capabilities to the read in order to support
+%     gathering distributions over finer-grained regions.]
+%
+%\end{classdesc}
+
+% -------------------------------- 
+\subsection{Composing operations with \class{Sequence}}
+% -------------------------------- 
+
+\begin{classdesc}{Sequence}{operations}
+
+  Class for representing a sequence of STEP \var{operations} to be
+  performed.  The \var{operations} are a list of STEP operations 
+  to be done in order. 
+
+  Creating \class{Sequence} objects notifies the STEP that the
+  operations will be done one-after-another. The STEP, in turn, can
+  sequence optimize the sequence.
+
+  Because a sequence is itself an operation, a sequence can be nested.
+ 
+% A nested list specifies operations that should be done in parallel.
+%   A nested list of operations passed to a sequence constructor is a
+%   request for STEP to do them in parallel (a \exception{StepError} when
+%   they can not be done in parallel). 
+   
+   
+%   \begin{methoddesc}{repeat}{until}
+%       repeat a sequence until the function \var{until} evaluates to true.
+%   \end{methoddesc}
+\end{classdesc}
+
+% Use a generic function to raise a BreakSequence exception instead. 
+% \begin{classdesc}{Break}{function}
+%   When function evaluates true, break out of a sequence, or repeating sequence
+%   of steps. 
+% \end{classdesc}
+
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{STEP methods}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+These are the public methods of a STEP.  When one imports \class{simp}, it
+provides wrappers for them.  
+
+\begin{funcdesc}{Do}{op,parameters=()} % ,n=1,
+   Tells the STEP to do the \var{op} with the specified \var{parameters}
+
+   \begin{note}
+   Normally, this function is not needed since it is called behind the 
+   scenes when one calls an op, as in \code{op()}.
+   \end{note}
+
+   The function is a wrapper for the STEP \method{Do} method.  
+   The optional\var{parameters} are passed to the operation's call method. 
+   Returns whatever the operation returns. 
+
+%   \class{Read} ops.
+%   but break if  an exception occurs in a function call.  
+\end{funcdesc}
+
+%\begin{funcdesc}{Repeat}{op,n}
+%   Repeat an operation or sequence of operations \var{n} times. 
+%%   but break if  an exception occurs in a function call.  
+%\end{funcdesc}
+
+\begin{funcdesc}{SeedRandom}{n=None}
+   Seed the SIMP and STEP random number generators with the integer \var{n}. 
+
+   Seeds the pseudo-random (deterministic) random number generator
+   that STEP employs for \class{Shuffle} operations and SIMP employs for
+   \method{makedist}.
+
+   The default seed is the current time (an integer cast of
+   \method{time.time()}).  It is set automatically when SIMP initializes.
+
+   \begin{note}
+   At this time, there is no method to get the seed because 
+   \method{SeedRandom} seeds multiple random number generators. At any 
+   given time the seed is a collection of all of their seeds. 
+   \end{note}
+
+\end{funcdesc}
+
+% Should we have GetSeed too?
+% The problem is that we use SetSeed to seed multiple random number 
+% generators, and their seeds will not be easy to break down...  
+
+\begin{funcdesc}{Flush}{}
+     Flush any STEP operations that may be pending in the pipeline. 
+
+     \begin{note} This is primarily a debugging function---operations
+            are flushed automatically by the STEP.
+     \end{note}
+\end{funcdesc}
+
+\begin{funcdesc}{ClearCache}{}
+   Often times a STEP will cache code and lookup tables.  
+   \function{ClearCache} clears the current cache that the STEP uses.  
+
+     \begin{note} This is primarily a debugging method.
+     \end{note}
+\end{funcdesc}
+
+
+
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% \section{STEP helper classes}
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% 
+% \begin{classdesc}{StepEvent}{event_type,op}
+%    \var{event_type} may be GET_PARAMETERS or RETURN. 
+%    The \var{op} is the operation that generated the event. 
+% \end{classdesc}
+
+
+%\begin{funcdesc}{rotations}{objs}
+%  Return of all circular rotations of the objects in the 
+%  list or tuple, \var{objs}.
+%
+%  Useful for defining rotationally invariant rules. 
+%
+%  The result is a tuple of tuples rotated to the left, 
+%  starting with the original list.  If the length of \var{objs} is
+%  \code{n}, the result is 
+%  \begin{verbatim}  
+%      [[lst[0], ... lst[n-2], lst[n-1]],
+%       [lst[1], ... lst[n-1], lst[0]],
+%        ...
+%       [lst[n-1], ... lst[n-3], lst[n-2]] ]
+%  \end{verbatim}
+%\end{funcdesc}
+% FHP example ...
+% # Get the six rotations of the state signals 
+% rots = rotations(state_signals)  
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Renderers} \label{sec:renderer}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\declaremodule{standard}{simp.step.renderers}
+\modulesynopsis{Rendering modules.}
+\moduleauthor{Ted Bach}{tbach@bu.edu}
+
+Renderers are objects that render signals to images.  Usually,
+this involves rendering a set of state values to a RGB array. 
+They do this by constructing the STEP \class{Read} operations 
+necessary to complete the task and performing any extra buffering
+that may be needed (in particular, the space-time renderers buffer 
+state information).  
+
+Renderer objects implement a common interface so that they may be accessed
+in a common way by the \class{Console}. 
+
+Renderers are used to obtain 2-D rendered images from signals.  In
+particular, they implement the \class{Renderer} interface, as such,
+they are compatible with \class{Console} objects, which rely on a
+renderers for generating the images they display.  They also provide 
+handy mechanisms for rendering from scripts. 
+
+At its core, rendering is a specialized \class{Read} op that does a
+rendered read to a set of color \class{OutSignal}s.  The rendering
+function is declared using in a rule object.  Given the rendering
+rule, the renderer automatically constructs the \class{Read} ops 
+that obtain the output. 
+
+% The user is responsible for making a rendering rule transition
+% function.  The renderer will then use the rendering rule to construct
+% the \class{Read} operations that read rendered output signals into
+% image arrays.  Two dimensional image arrays are represented by
+% three-dimensional \class{UInt8} arrays, indexed by $Y$ and $X$ in the
+% most significant dimensions and the color channel in the least
+% significant dimension.  The red, green, and blue channels are at index
+% 0,1, and 2. (Three dimensional voxel images can also be
+% generated. They are represented with four dimensional arrays and often
+% will have an extra alpha (opacity) channel.)
+
+                                  
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Rendering}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+The \class{Renderer} defines the basic rendering interface. The
+\class{XTRenderer} extends it. Other extensions might later include a
+\class{VolumeRenderer}.
+
+%Often one will use the SIMP helper \function{declarecolors} 
+%(\label{sec:declarecolors}) to declare the \class{OutSignal} objects
+%used in rendering.
+
+
+%    Given a rule, mapping signals to a set of output signals, the
+%    Renderer constructs the approproate STEP Read operations for
+%    reading out specified views.  In particular, the renderer provides
+%    an interface that the Console and scripts can easily use to
+%    control rendering.
+%
+%    The renderer is a callable object that, when called, returns the
+%    rendered output signal values in a single array.  If there is
+%    more than one output signal, the values are packed into a single
+%    array with n+1 dimensions---the least significant is indexed by
+%    the ordering of the output signals. 
+%
+%    The view is the portion of the state rendered.  The renderer has
+%    the following read only state attributes pertaining to the view
+%       center --- the center coordinate for the view
+%       shape --- the array shape of the view
+%       size --- the grid size of the view
+%       region --- the coordinate region of the view
+%       maxshape --- the largest shape that can be viewed
+%
+%    One can set the center with setcenter(). The Console uses this for
+%    panning. One can set the array shape of the view with setshape().
+%    The actual center or shape may differ from the values
+%    specified. For example, if one sets a shape larger than maxshape,
+%    the shape is clamped to maxshape.  Therefore, one should always use
+%    the shape and center attributes to query the information after calling
+%    a set function.
+%
+%    Together, the center and the shape specify the region.  The region
+%    is a rectangular grid region to be rendered.  One can set the
+%    region with setregion.  It accepts the standard region
+%    objets---Python subscript lists and simp.latticearray.Region
+%    objects. Changing the region automatically changes the center and
+%    shape.
+
+
+\begin{classdesc}{Renderer}{render_rule,outputs}
+   Given a \var{render_rule} (\class{Rule} object), that sets the
+   values of the signals in \var{outputs} the Renderer constructs the
+   approproate STEP \class{Read} operations for reading the \class{outputs}.
+
+   It is usually used for rendering two--dimensional spaces, but can
+   render spaces with any number of dimensions.
+
+   The renderer provides an interface that the Console and scripts can
+   easily use to control rendering and the \emph{view}---the subset of the
+   space---that is rendered.
+
+ 
+   {\bf Initialization parameters}
+
+   \begin{memberdesc}{render_rule}
+     The \class{Rule} used for rendering.  It must set values of the 
+     \var{outputs}.
+   \end{memberdesc}
+
+   \begin{memberdesc}{outputs}
+     Tuple (or list) of the \class{OutSignal} objects rendered. If
+     there is more than one output, the least significant dimension of
+     the result array indexes the output values in the order specified
+     by \var{outputs}. 
+   \end{memberdesc}
+
+   \begin{memberdesc}{name}
+     Name of the renderer. Taken from the name of the \member{render_rule}.
+   \end{memberdesc}
+
+
+   The renderer is a callable object. When called it returns the
+   rendered output signal values in a single array.  If there is more
+   than one output signal, the values are packed into a single array
+   with n+1 dimensions---the least significant is indexed by the
+   ordering of the output signals.
+
+   \begin{methoddesc}{__call__}{out=None}
+        Call the renderer and return the output array.
+
+        \var{out} is the array be rendered to. If not specified, a new
+        array is created and returned.
+
+        Rendering is performed on the current view specified by the
+        \member{shape},\member{center}, and \member{region}
+        parameters.
+   \end{methoddesc}
+
+
+   {\bf View descriptor data (read-only)}
+
+   The view is the portion of the state rendered.  The renderer has
+   the following \emph{read only} state attributes pertaining to the
+   view. Note that the parameters describe the view in terms of both
+   the array that will be rendered (which is what the console cares
+   about) and the underlying coordinate space.
+
+   The \class{Console} will be primarily interested in modifying the
+   shape and center coordinate.
+ 
+   \begin{memberdesc}{size}
+      The grid size of the region to be rendered. 
+   \end{memberdesc}
+
+   \begin{memberdesc}{maxsize}
+     The maximum size of the region that could be rendered to. 
+   \end{memberdesc}
+
+   \begin{memberdesc}{shape}
+      The shape of the array to be rendered for the current view. 
+   \end{memberdesc}
+
+   \begin{memberdesc}{maxshape}
+     The maximum shape that could be rendered if the view were to be expanded
+     as wide as possible.
+   \end{memberdesc}
+
+   \begin{memberdesc}{center}
+     The center coordinate of the view to be rendered. 
+   \end{memberdesc}
+
+   \begin{memberdesc}{region}
+     The \class{Region} object specifying the rectangular region containing
+     the view. 
+   \end{memberdesc}
+
+   {\bf View methods}
+
+   \begin{methoddesc}{setregion}{region}
+     Set the grid coordinate \var{region} for rendering.  
+   
+     The default is from 0 to \var{maxsize}.
+   \end{methoddesc}
+
+   \begin{methoddesc}{setcenter}{center=None}
+     Set the center coordinate for rendering. 
+
+     Augments the \member{region} to reflect the new \var{center}. If
+     \var{center} is \code{None}, it sets the center to be the center of the
+     coordinate space.
+   \end{methoddesc}
+
+
+   \begin{methoddesc}{setshape}{shape=None}
+      Set \var{shape} of the array to be rendered to. 
+
+      If it is larger than \member{maxshape}, it is clipped at
+      maxshape.  Modifies the \member{region} but not the
+      \member{center}.  The default is \var{maxshape}. 
+   \end{methoddesc}
+\end{classdesc}
+
+
+
+\begin{classdesc}{XTRenderer}{render_rule,outputs,time=None}
+
+   The space-time renderer, \class{XTRenderer}, records past rendering
+   history and provides an $n+1$ dimensional space-time view.  Beyond
+   this, it implements the basic \class{Renderer} interface.
+
+   Except for the addition of \var{time}, the initialization
+   parameters are the same.  Time gives the amount of history to be
+   maintained.  By default, it's the same as the size of the lowest
+   dimension.  
+
+   Normally, time increases moving downwards. To make it increase going
+   upwards, use a negative value for \var{time}.
+
+   \begin{warning}
+      Currently, \var{setshape}, \var{setcenter}, and \var{setregion}
+      don't do anything.
+   \end{warning}
+
+   Calling \method{record} renders a new line in the space-time
+   history. Typically, it will be called by the \class{Console}, after
+   \code{"STEP"} events.  The \class{Console} automatically checks to
+   see whether a renderer defines the \method{record} event.
+   
+   \begin{methoddesc} {record}{}
+      Records the rendered value of the current state.  
+   \end{methoddesc}   
+
+   Calling the renderer returns an array containing the rendered history.
+
+\end{classdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{The \class{Console}}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+The \class{Console} provides a viewer window and an interactive key command
+interface for running SIMP programs interactively.  The
+\class{Console} included with SIMP is built on the \verb|pygame|
+(\url{http://pygame.org}) Python interface to the SDL (simple direct
+media layer).
+
+
+\begin{classdesc}{Console}{renderers,shape=None,center=None,mag=None,
+                           zoom=1,showgrid=1}
+    Console user interface.
+
+    The \var{renderers} argument is a list (or single object)
+    specifying the \class{Renderer} objects that the \class{Console}
+    uses to get the image arrays that it displays. \code{shape} is the
+    shape of the screen---defaults to \member{maxshape} of the first
+    renderer object. \code{center} is the center position for
+    rendering (defaults to the center of the space) and \code{mag} is
+    the magnification (defaults to 1). \var{zoom} gives the zoom in 
+    factor for the display. \var{showgrid} indicates whether grid lines
+    are to be shown when one zooms in. 
+    
+
+    \begin{methoddesc}{bind}{event,object}
+
+      Bind a keypress or event to a function or callable \class{object}
+      that handles it.
+
+      \strong{generic key events}
+
+       Most events are associated with single keypresses. 
+       The console defines lower-case key commands. The user can define
+       handlers for all the upper-case keys as well as the following 
+      \emph{user-defined events}
+
+      \begin{itemize}
+        \item \code{'STEP'}
+           Function or operation to be called when running a single step.
+
+           The console increments \member{step_counter} after every step.
+
+           If any of the console's renderers defines the \method{record()}
+           method, it is called to record the state for space-time rendering
+           purposes. 
+           
+%        \item \code{'RENDER'}
+%           Specifies \class{Renderer} object that handles all rendering related
+%           events. The \code{'RENDER'} event is special in that specifies a 
+%           collection of events rather than just one special event.  These
+%	   events include changing the region to be rendered (for panning and 
+%           zooming).
+%
+%           If a list of renderers is given, the first will be used for 
+%           rendering and the remaining are user selectable.
+%        \item \code{'RECORD'}
+%           Function to be called after running a single step. 
+      \end{itemize}
+    \end{methoddesc}
+
+    \strong{special system-defined events}
+
+    We document some of the more interesting system-defined events.  
+
+      \begin{itemize}
+        \item \code{' '}, \kbd{<space>}
+	   Triggers the console to run a single \code{'STEP'} 
+           or sequence of step events.  The default is a single step, but
+           this can be changed by specifying a numeric argument. 
+
+%        \item \code{'RENDER'}
+%           Specifies \class{Renderer} object that handles all rendering related
+%           events. The \code{'RENDER'} event is special in that specifies a 
+%           collection of events rather than just one special event.  These
+%	   events include changing the region to be rendered (for panning and 
+%           zooming).
+%
+%           If a list of renderers is given, the first will be used for 
+%           rendering and the remaining are user selectable.
+%        \item \code{'RECORD'}
+%           Function to be called after running a single step. 
+
+        \item \code{'$\backslash$n'}, \kbd{<enter>} 
+           Begin running \code{'STEP'} events continuously. Runs until 
+           \kbd{<space>} or \kbd{<enter>} is pressed. 
+
+        \item \code{'RENDER'}
+           The internal rendering handler.  Invokes the current render,
+           obtains an output array, and shows it on the screen at the 
+           desired magnification.
+
+	   The console automatically issues a \code{'RENDER'} events when
+	   the state may have changed. 
+      \end{itemize}
+
+
+
+    \begin{methoddesc}{issue}{event}
+       Explicitly issue an event from a script.  The console handles
+       this as it would an ordinary user keypress. 
+
+       Useful for driving the console from a script.
+    \end{methoddesc}
+
+
+    \begin{methoddesc}{binding}{event}
+      Return the handler bound to \var{event}.
+    \end{methoddesc}
+
+    \begin{methoddesc}{unbind}{event}
+      Unbind the handler bound to \var{event}. 
+    \end{methoddesc}
+
+    \begin{methoddesc}{array}{}
+      Return the image array of the current view. 
+    \end{methoddesc}
+
+%    \begin{methoddesc}{show}{array=None}
+%      Show a specific 3D color \class{array}. If array is none, shows the
+%      current rendered array.
+%    \end{methoddesc}
+
+    \begin{methoddesc}{start}{}
+      Start the control panel.  Will not exit until the user quits.
+    \end{methoddesc}
+
+    \begin{methoddesc}{close}{}
+       Close the console---destroys its window. 
+    \end{methoddesc}
+
+\end{classdesc}
+
+XXX document the builtin commands.
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Using \module{import_locally} to make multiple \module{simp} instances}
+\label{sec:importlocally}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\declaremodule{standard}{simp.importlocally}
+\modulesynopsis{Tools for importing local copies of a module}
+\moduleauthor{Ted Bach}{tbach@bu.edu}
+
+
+The \module{simp} module is designed to be imported once and be imported
+with \code{from simp import *}.  In some situations, one might like to 
+have multiple instances of \module{simp} at the same time.  The 
+\module{import_locally} supports this.
+
+\begin{note}
+  Some methods require that either a SIMP instance be passed to them
+  explicitly or that they be initialized in a namespace where 
+  all methods from \module{simp} have been imported. In particular,
+  they look for the function, \function{simpmodule()}.  
+\end{note}
+
+
+This module is used in cross validation. We don't expect it to be used
+frequently by users since usually a program requires only one
+\module{simp} instance.  The basic template is
+
+\begin{verbatim}
+  import import_locally
+  simp1 = import_locally.import_copy("simp")
+  simp2 = import_locally.import_copy("simp")
+\end{verbatim}
+Now, one must explicitly qualify all of the \module{simp} methods as in
+\verb|simp1.import_locally(...)| and \verb|a = Signal(...,simp=simp1)|.  One
+must be careful not to mix operations and signals from the different simp
+modules.  
+
+To emulate \code{from simp import *} on one of the modules, use
+\begin{verbatim}
+  import_locally.import_all(simp1)
+\end{verbatim}
+To switch the local definitions to the other module, first unimport the 
+first module and load the second,
+\begin{verbatim}
+  import_locally.unimport_all(simp1)
+  import_locally.import_all(simp2)
+\end{verbatim}
+
+%\subsection{functions}
+
+\begin{funcdesc}{import_copy}{module_name}
+   Import a new copy of a module, but don't add it to the global list of
+   modules.  This way, separate imports don't, as is normally the case in
+   Python, access the same module object.
+
+   \var{module_name} is the string name of the module.  Returns the
+   module object.
+\end{funcdesc}
+
+
+\begin{funcdesc}{import_all}{module}
+  Import all methods and variables from an \var{module} object into the
+  current local namespace. Emulates \samp{from module import *}.
+
+  \begin{note}
+     Only static module attributes should be referenced. Don't expect
+     values to change in the local namespace when they change in the
+     module.  To change module values, one must reference the module
+     directly.  Although all of the attributes are imported, changing
+     the value associated with the attribute in the local namespace
+     does not change the value that module methods use and attributes
+     whose values are modified by the module will not be updated in
+     the module's namespace, but not in the local namespace.
+  \end{note}
+\end{funcdesc}
+
+\begin{funcdesc}{unimport_all}{module}
+  Removes all references from a module object from the current local namespace.
+  Python does not have an equivalent. 
+\end{funcdesc}
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Testing and cross-validation}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\declaremodule{standard}{simp.test}
+\modulesynopsis{Tools for testing, benchmarking and cross-validating}
+\moduleauthor{Ted Bach}{tbach@bu.edu}
+
+
+Testing and cross-validation facilities are contained in the \module{test}
+module. 
+
+
+\begin{funcdesc}{test}{}
+   Run all of the test code. 
+\end{funcdesc}
+
+\begin{funcdesc}{cross_validate}{}
+   Cross validate the installed STEP implementation modules. 
+\end{funcdesc}
+
+
+% ================================================================
+                               \chapter{STEP Implementations}
+% ================================================================
+
+In this chapter, we discuss the particulars of some of the STEP 
+implementations.  Currently, distribute the following implementations.
+
+\begin{itemize}
+   \item \module{Reference} --- A slow, pure Python reference
+     implementation written for correctness and clarity first and speed second.
+   \item \module{Pc} --- A fast serial PC implementation based upon
+     numarray and C.
+   \item \module{PcThreaded} --- Use multiple threads for a 
+     multi-processor/multicore PC environment. Inherits from \module{Pc}.
+   \item \module{PcCodeGen} --- Generates code for the inner scan loop 
+     and the transition-function on-the-fly.  It can use either a 
+     LUT or C code to implement the transition-function. The C code 
+     implemenation is used when the LUT would be larger than 16 bits. 
+     All signal types can be used for this implementation. 
+     Because it inherits from \module{PcThreaded} it can also run 
+     with multiple threads of control. 
+\end{itemize}
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{\class{Reference}} \label{sec:referenceStep}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{\class{Pc}} \label{sec:pcStep}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{\class{PcCodeGen}} \label{sec:pccodegenStep}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+
+Unlike the other STEP implementations, \class{PcCodeGen} does not
+solely use lookup tables to implement transition-functions.  If the
+number of bits of input exceeds a predefined threshold of 16
+(\code{maxlutsize} parameter \secref{sec:pccodegen}), it instead uses
+\class{C} code.  This has the advantage of allowing \code{PcCodeGen}
+to use a wider variety of types. However, when it must generate
+\code{C} code the \code{PcCodeGen} places some additional restrictions
+on the transition-functions and will raise an error when a
+transition-function does not obey them.  
+
+\subsection{sec:pccodegen_rule_limitations}
+We'll now address the extra limitations that the 
+
+\subsubsection{Limited variable types} 
+
+Because all variables must be converted to simple \code{C} 
+types, only signals and integer and floating point types can be used
+in a transition-function.  More complicated Python types 
+such as tuples, lists, and dictionaries are not allowed.
+
+\subsubsection{Limited statements} 
+
+Only basic assignment and \code{if} statements are
+recommended.  \code{while} statements will compile, but,
+because of the possiblility of infinite loops and long
+per-site computations, are not a advisable when they can be
+avoided.  All other statements like \code{try}, \code{raise},
+and \code{for}\fnmark statements are prohibited.
+
+\fntext{The \code{for} statement is not allowed because it uses list 
+  comprehension.}
+
+\subsubsection{No sub-function calls}
+
+With the exception of the functions \function{float} and
+\function{int}, which are used to cast variables to the
+floating-point and integer types, a transition-function can
+not call sub-functions.  This is because \class{PcCodeGen}
+does not analyze sub-functions.  This restriction may be
+lifted in the future.
+
+\subsubsection{Type inferencing and consistently typed names}
+
+Unlike Python code, in which a name may hold any type of data,
+the \code{C} code variables into which \code{PcCodeGen} converts 
+names, must have static types---in particular, one can not store a 
+floating point value in a variable at one time and an integer 
+in it at another.  In \code{C}, type must be declared from the beginning.
+
+However, python syntax does not support type declaration, so
+\class{PcCodeGen} must infer the types of names when converting them
+to \code{C} variables.  \code{PcCodeGen} uses types associated with
+signals and values in the frozen context of the transition-function
+to infer types for names.  If a name is assigned to an integer value, 
+\code{PcCodeGen} infers an integer type for it; if a name is assigned to
+a value of \code{1.1} \code{PcCodeGen} a floating point type for it.
+
+Sometimes the type  can't be inferred, in which case, 
+\class{PcCodeGen} will raise an.  An important case where this can 
+happen is when a name is assigned multiple times in the code and the 
+assignment values are not consistently typed. 
+For example, assuming that \code{I} is a \class{UInt16} \class{Signal} 
+and \code{F} is a \code{Float32} signal, in the following transition-function
+\begin{verbatim}
+def inconsistent():
+   if I<4: temp = F
+   else: temp = I
+   F._ = temp
+\end{verbatim}
+the type of \code{temp} is inconstent because the \class{PcCodeGen}
+infers that it is both a floating-point or integer variable. The type is 
+inconsistent. 
+
+Assuming that we want \code{temp} to be a float, we can rectify this
+by using the \function{float} coercion function as in
+\begin{verbatim}
+def inconsistent():
+   if I<4: temp = F
+   else: temp = float(I)
+   F._ = temp
+\end{verbatim}
+
+Most of \class{Signal} types (\class{SmallUInt}, \class{UInt8}, \class{Int8}, 
+\class{UInt16}, \class{Int16}, \class{UInt32}, \class{Int32}) map to integer
+types in the transition-function.  Only the \class{Float32} type maps to 
+floating point. 
+
+
+
+
+% ---------------------------------------------------------------- 
+    \section{General Remarks and comparisons}
+% ---------------------------------------------------------------- 
+
+% We have introduced SIMP's core constructs for programming CA and LG
+% experiments; but, there are many more constructs for things like
+% managing interactive user-interface, making parameterized experiments,
+% controlling rendering and viewing, and so on.  Although we have
+% focused on two-dimensional systems, SIMP can support as many
+% dimensions as one can reasonably use.  For one-dimensional rules,
+% space-time diagrams can easily be rendered.  For three dimensional
+% rules,  volume rendering is supported via the VTK package.  We refer
+% those now ready to start writing SIMP programs to the further
+% examples, documentation, and code available at \id|http://pm.bu.edu|.
+% 
+% \smallskip
+% 
+% 
+% \smallskip
+% 
+
+{\strong XXX Warning: This section and is a work in progress!!!}
+
+The primary goal of the STEP interface and runtime system is to make
+the same SIMP program portable across various machines, architectures,
+and implementation strategies. The goals, rationale, and
+implementation strategies of the STEP framework are discussed in
+\cite{bach03simpstep}. Although SIMP programs are written in the
+Python programming language---a scripting language---their performance
+is similar to that of a compiled programs.  This is due to the fact
+that the STEP runtime system translates the high-level constructs and
+function calls into lookup tables and efficient {\tt C} code.
+Currently, on an entry-level 400MHz Mobile Intel II Pentium, the PC
+STEP runtime distributed with version 0.4 can perform HPP's updates at
+a rate of 5 million sites-per-second (80 CPU cycles-per-site) and on a
+2500 MHz Pentium 4 it achieves 41 million sites-per-second (60 CPU
+cycles-per-site).  Memory requirements scale with the size of the
+space, and interactive rendering with a modern video card typically
+only slows updates by a factor of two.
+
+Currently, SIMP only supports signals defined over small state sets
+and update functions are limited in the number of signals that they
+may use as inputs.  This is because STEP converts the update functions
+into lookup tables (LUTs) and the size of a LUT is exponential in the
+number of input signals.  One can get around this constraint by
+implementing large updates with a set of smaller, independent updates
+having smaller LUTs.  We are now implementing methods of automating the
+compilation of LUTs and considering adding support for mixed integer
+and floating point types.
+
+\Fig{performance}{
+  \begin{tabular}{cc}
+      \includegraphics{benchmark/pm5.bu.edu.parityneighbors.eps} &
+%      \includegraphics{benchmark/neighborperformance.eps} &
+%      \includegraphics{benchmark/pm5.bu.edu.paritysize.eps} \\
+   \\
+     (a) N neighbors vs Msite/sec & (b) $\log_2(\mathrm{size})$ vs Msite/sec\\
+  \end{tabular}
+}{{\bf Performance} 2D Parity with various sizes and numbers of neighbors 
+on {\tt pm5.bu.edu}, a 2.4 GHz P4. (a) shows how the number 
+the performance scales degrades as one increases the number of neighbors 
+while (b) shows how the performance increases with larger sizes. }
+
+
+\Fig{performance}{ \centering
+  \begin{tabular}{cc}
+  \includegraphics{benchmark/PcVsCodeGen.eps} & 
+%  \includegraphics{benchmark/eugenusCodeGenLutVsCode.eps} & 
+%  \includegraphics{benchmark/eugenus.PcVsCodeGen.eps} 
+  \\
+   (a) sec/site 
+% & (b) Msite/sec
+  \end{tabular}
+} 
+{{\bf Comparision between the static and dynamic engines} 
+    For the parity rule, which is a simple function of
+    the neighbors, overall performance is better with the code
+    generating STEP.  Since the local transition-function is compiled to
+    a LUT, the performance does not degrade exponentially with the
+    number of neighbors. XXX generate a graph that compares Pc to CodeGen
+    with and without the lut (ie. set the threshold high).  }
+
+
+\Fig{performance}{
+  \begin{tabular}{cc}
+      \includegraphics{benchmark/parallelperformance.eps} &
+      \includegraphics{benchmark/parallelspeedup.eps} \\
+    Msite/sec vs $n$-processors & speedup and ideal speedup vs $n$-processors \\
+\end{tabular}
+}{{\bf Parallel Performance} parity on a $2000 \times 2000$ ($4*10^6$ site) 
+  grid with 5 neighbors on {\tt pobo.bu.edu}---a shared memory 
+  IBM pSeries 690 AIX 2.5 system in the Boston University Scientific Computing 
+  and Visualization Center ({\tt scv.bu.edu}) with 
+  32 Power4 processors running at 1.3 GHz and sharing 1 GB of memory.}
+
+
+%\Fig{performance}{
+%      \includegraphics{benchmark/eugenusCodeGenLutVsCode.eps} 
+%}{{\bf Comparision of LUT and code generation on the dynamic STEP} }
+

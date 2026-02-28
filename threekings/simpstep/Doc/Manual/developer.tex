@@ -1,0 +1,316 @@
+% ================================================================
+                               \chapter{Developer Documentation}
+% ================================================================
+
+This chapter documents the architectural and engineering aspects of
+the software at a high-level.  It is meant to serve as a reference for
+those would like to know more about the software either for curiosity's 
+sake or in order contribute.  
+
+%% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Module layout}
+%% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+\begin{itemize}
+   \item \module{simp} --- top-level user interface
+   \item \module{simp.cache} --- caching using the shelve module
+   \item \module{simp.consolebase} --- base module for the simp console
+   \item \module{simp.pygame_console} --- \module{pygame} based console
+   \item \module{simp.geom} --- helper geometric utilities
+   \item \module{simp.helpers} --- helper methods sourced into the simp module
+   \item \module{simp.import_locally} --- utilities for importing local copies
+          of modules
+   \item \module{simp.latticearray} --- module containing the definitions of 
+      \class{LatticeArray}, \class{Region}, and \class{LatticeArrayRegion} 
+      classes.
+   \item \module{simp.renderers} --- \class{Renderer} and \class{XTRenderer} 
+       class definitions
+   \item \module{simp.rule_analysis} --- methods and classes for analyzing 
+       Python transition functions, doing rule checking, gathering their 
+       inputs and outputs, generating C code and performing type inferencing. 
+   \item \module{simp.simpinclude} --- generated file containing SIMP 
+       release and version information.
+   \item \module{simp.stepmodules} --- contains all of the STEP implementations
+%   \begin{itemize}
+%      \item \module{simp.stepmodules}
+%   \end{itemize}
+   \item \module{simp.step} --- definition of the STEP interface and objects.
+   \item \module{simp.test} --- testing module
+   \begin{itemize}
+     \item \module{programs} --- contains test SIMP program class wrappers for 
+            cross-validation and testing purposes.
+     \item \module{strobe_test} --- tests the rule strober
+     \item \module{sysinfo} --- module for gathering information about 
+               the current system.
+     \item \module{sysinfo} --- module for gathering information about 
+               the current system.
+     \item \module{results} --- contains the expected results for validating
+               some of the code in \module{programs}.
+   \end{itemize}
+
+\end{itemize}
+
+
+%
+%\begin{itemize}
+%  \item \module{simp} --- Contains the top-level user interface
+%  \item \module{simp.context} --- Tools for using multiple instances. 
+%  \item \module{simp.console} --- An interactive console for rendering and 
+%                                  viewing.  
+%  \item \module{simp.step} --- Defines the STEP interface (signals and primitive
+%                            ops).
+%  \item \module{simp.test} --- Test and debugging module.
+%  \item \module{simp.stepmodules} --- Contains all of the STEP implemetations.
+%\end{itemize}
+
+
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{Project directory layout}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+The project contains the following directories and files. 
+\begin{itemize}
+  \item \file{README.txt} --- Instructions for building the project
+  \item \file{LICENSE.txt} --- The terms and conditions of the LGPL license 
+         under which this software is released.
+%  \item \file{TODO} --- List of things to be done
+  \item \file{setup.py} --- Python setup file used to compile code, install,
+       and make binary installers for \module{simp}. Follows the usual
+       \module{distutils} conventions.
+  \item \file{Doc/} --- documentation directory.
+%   \begin{itemize}
+%       \item \file{manual/} --- (Latex file and tools for generating
+%       this manual.)
+%       \item \file{notes/} --- file with miscellaneous notes about SIMP
+%            and future directions.
+%   \end{itemize}
+  \item \file{DosUtils/} --- compiler utilities for Windows.
+  \item \file{Examples/} --- example SIMP code---including code from the
+                              tutorial. 
+  \item \file{Lib/} --- library containing the python modules.
+%  \begin{itemize}
+%      \item \file{__init__.py} The simp module and all of its definitions. 
+%      \item \file{step.py} The step interface--\class{Signal},ops,\class{step} 
+%          base class definition.
+%  \end{itemize}
+  \item \file{Src/} --- Source C code for extension modules
+%  \item \file{Misc/} --- Code that we are testing or thinking of including
+\end{itemize}
+
+%   graphical_test(module)  
+%     Runs a graphical test of the module
+%
+%   cross_validate(reference,to_test)
+%     Runs a cross validation routine.
+%
+%   test(module)
+%
+%   test_all()
+%     Test all step modules in the system
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\section{STEP interface} \label{sec:stepinterace}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{The STEP class} 
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+The \module{step} module contains the definitions of all the STEP
+objects described in \secref{sec:stepops} and an abstract STEP class
+definition called \class{step_base}.
+
+% However, a
+% STEP must also keeping track of lattice positions of \class{Signal}
+% and \class{Rule} objects.
+
+A STEP is responsible storing signals, implementing STEP operations
+and keeping track of the starting positions of lattices.  A module
+exporting the STEP interface contains a class called \class{step} that
+implements the following class
+
+% cache_dir=None
+\begin{classdesc}{Step}{size,verbose=1,**kwargs}
+
+  The base constructor does not have any default keyword arguments,
+  but, an individual implementation may define some.  The constructor
+  should have default values for any arguments that are not specified
+  explicitly.
+
+  \begin{memberdesc}[vector] {size}
+    vector giving the size of the grid---the coordinate space on which
+    allocations are made.
+  \end{memberdesc}
+
+  \begin{memberdesc}[int] {verbose}
+     Integer controling how much information \class{Step} prints.  0
+     prints nothing. 1 prints the standard information, informing the
+     user when tables are being compiled {\it et cetera}. 2 prints
+     more detailed information and suggestions.  3 and above print
+     debugging information. Defaults to 1.
+  \end{memberdesc}
+
+  
+%  \var{cache_dir} defines the directory path where the step will cache
+%  its definitions.  By default, this is the user's home directory. 
+%
+  \begin{memberdesc}[string] {name}
+    The name of the STEP module.
+  \end{memberdesc}
+
+  \begin{methoddesc}{Do}{op,parameters=()}
+     Do a STEP . The optional \var{parameters} list is for passing an
+     op's optional call parameters such as the output array for \class{Read}
+     ops and the input array for \class{Write} ops.
+  \end{methoddesc}
+
+  \begin{methoddesc}{Register}{object}
+     All STEP interface objects (primitives and signals) must be
+     registered before they are valid.  When an object is registered,
+     the STEP checks to see whether it can implement the operation or
+     allocate the requested \class{Signal}.  If not, it raises a
+     \exception{StepError} indicating the problem.
+  \end{methoddesc}
+
+  
+%  \begin{methoddesc}{Repeat}{op,n}
+%     Repeat an operation or sequence of operations \var{n} times. 
+%  %   but break if  an exception occurs in a function call.  
+%  \end{methoddesc}
+  
+  \begin{methoddesc}{SeedRandom}{n=None}
+     Seed the random number generator with the integer \var{n}. The seed
+     is used for the pseudo-random (deterministic) random number
+     generator that STEP employs for \class{Randomize} and \class{Shuffle}
+     operations.
+  
+     The default seed is the current time (an integer cast of
+     \method{time.time()}).  It is also set automatically when a STEP is
+     initialized.
+  \end{methoddesc}
+  
+  \begin{methoddesc}{Flush}{}
+       Flush all pending STEP operations and return when finished.
+  
+       \begin{note} This is primarily a debugging function.
+       \end{note}
+  \end{methoddesc}
+  
+  \begin{methoddesc}{ClearCache}{}
+     Often times a STEP will cache code and lookup tables.  
+     \function{ClearCache} clears the current cache that STEP uses.  
+  
+       \begin{note} This is primarily a debugging method.
+       \end{note}
+  \end{methoddesc}
+
+
+%  \begin{methoddesc}{Do}{op,params}
+%     This is the basic method used to invoke a STEP operation. It is
+%     usually called by \method{op.__call__}.  The \var{params} are the
+%     positional arguments to the operation.  If the operation has
+%     return values, they are returned.
+%  \end{methoddesc}
+%
+%  \begin{methoddesc}{Register}{object}
+%     All STEP interface objects (primitives and signals) must be
+%     registered before they are valid.  When an object is registered,
+%     the STEP must check to see whether it can implement the object or
+%     allocate the requested signal.  If not, it raises a
+%     \exception{StepError} indicating the problem.
+%  \end{methoddesc}
+%    
+%  \begin{methoddesc}{Flush}{}
+%     Flush any pending operations. This function is present for
+%     testing purposes and should not typically need to be called
+%     because \class{Read} operations automatically cause the STEP to
+%     flush results.
+%  \end{methoddesc}
+
+\end{classdesc}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Suggested STEP implementations}
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Some suggestions for other implementations are 
+
+\begin{itemize}
+   \item \module{PcSparse} --- Optimized for sparse updates. 
+%   \item \module{pc_inline} --- uses the \module{pyinline} module to compile
+%    C code on the fly. (supports arbitrary C typed signals) This will require
+%    more sophisticated function analysis. 
+   \item \module{Multispin} --- Use bit operations of the PC vector operations.
+    Fast for repeated steps, but slow for reads and writes.  
+   \item \module{Mmx} --- Uses MMX vectorized instructions when possible.
+   \item \module{Mpi} --- Use MPI (the message passing interface) 
+                       to make fast updates on parallel machines.
+%   \item Float --- Allow floating point signals. 
+   \item \module{Fpga} --- Use a FPGA as a stream co-processor. 
+\end{itemize}
+
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+           \section{Rolling your own---extending SIMP and STEP} 
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+          
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+\subsection{Writing your own renderer} 
+% -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+In order to get different rendering behavior, one may wish to create a
+new renderer. Such a renderer may be constructed manually using
+\class{Rule} and \class{Read} operations.
+
+In order to make a renderer work with the \class{Console}, one need
+only implement the interface defined by the methods of the
+\class{Renderer} class.
+
+XXX Add some more here...
+
+                                  
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% \section{Reference STEP}
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% 
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% \subsection{Rule function analysis}
+% % -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+% 
+% \begin{itemize}
+%   \item Find globals. Perform rule checking---no explicit \code{globals}.
+%   \item Find and inline explicitly inlined functions.
+%   \item Find globals again.
+%   \item Replace globals (except for signals) with constants.
+%   \item Eliminate constant subexpressions.
+%   \item Gather and replace input and output signals.
+%     \begin{itemize} 
+%       \item Replace signal and signal slice assignments with global
+%             assignments to replacement proxy names. (Will need to make
+%             the output names explicit globals). Build a data structure
+%             to represent the mapping between the two.
+%       \item Replace the signal and signal slice reads with global proxy
+%             names. Build a data structure to represent the mapping between
+%             the two.
+%     \end{itemize}
+%   \item Perform syntax checking---ensure that global names are not
+%         deleted, and if possible, that mutable objects are not
+%         modified.
+% \end{itemize}
+% 
+% 
+% These operations result in an encapsulated rule object suitable for building
+% lookup tables.  The same object could also be used to perform further anlyses
+% such as LUT packing and C code compilation.  The encapsulated rule object 
+% supports hashing.
+% 
+
+% ================================================================
+% ================================================================
+
+%begin{latexonly}
+%\renewcommand{\indexname}{Module Index}
+%end{latexonly}
+%\input{modlib.ind}              % Module Index
+
+% -------- Begin subscript underscore
+%\catcode`\_=8   % 
+
+%begin{latexonly}

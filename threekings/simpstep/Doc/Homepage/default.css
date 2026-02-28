@@ -1,0 +1,129 @@
+body {
+  margin: 1em;
+  padding: 0; /* overriding Opera default of 8px */
+  color: #000000;
+  background-color: #ffffdf;
+}
+
+hr {
+  height: 1px;
+  border: none;
+  background-color: #6f6f6f;
+  color: inherit;
+}
+
+dt {
+  margin-left: 0;
+}
+dd {
+  margin-left: 2em;
+}
+
+blockquote {
+  margin-left: 2em;
+  margin-right: 2em;
+}
+
+input.button {
+  margin-left: 0.5em;
+  margin-right: 0.5em;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #6f6f6f;
+  background-color: #ffffdf;
+  color: #00007f;
+  font-family: Tahoma, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.center {
+  text-align: center;
+}
+
+.notes {
+  font-size: 85%;
+  font-style: italic;
+}
+
+#side {
+  position: fixed; /* not working in IE */
+  float: left; /* workaround for IE, correctly overridden by "position: fixed" elsewhere */
+  top: 1em; /* overriding Opera default of 0 */
+  left: 1em; /* ditto */
+  width: 130px;
+  height: 100%; /* partial workaround for IE, which has an ugly bug causing right side main content to unalign vertically */
+  text-align: right;
+  font-family: Tahoma, sans-serif;
+  font-size: 70%;
+}
+#side ul {
+  margin-left: 0; /* workaround for IE and Opera, where list margins only surrounds the principle boxes of the items within the list */
+  margin-right: 0;
+  padding-left: 0; /* correct in Mozilla, where list margins surrounds not only the priciple boxes, but also the marker boxes of the items */
+  padding-right: 5px;
+  list-style-type: none;
+}
+#side li {
+  margin-top: 0; /* overriding Opera default of 3px */
+  margin-bottom: 0; /* ditto */
+  line-height: 120%; /* workaround for IE, which has a non-standard line height (*@#?!) */
+}
+
+#menu {
+  margin-bottom: 3ex;
+  font-size: 14px;
+  font-weight: bold;
+}
+#menu a {
+  margin-right: 3px;
+  border-right-width: 1px;
+  border-right-style: solid;
+  border-color: #00007f;
+  padding-right: 5px;
+  text-decoration: none;
+  background-color: inherit;
+  color: #00007f;
+}
+#menu a:hover {
+  margin-right: 0;
+  border-right-width: 4px;
+}
+#menu a.current {
+  margin-right: 0;
+  border-right-width: 4px;
+}
+#menu .highlight {
+  padding-left: 0.5ex;
+  padding-right: 0.5ex;
+  background-color: #1f1f9f;
+  color: #ffffdf;
+}
+#menu ul.submenu {
+  margin-right: 3px;
+  border-right-width: 1px;
+  border-right-style: solid;
+  border-color: #00007f;
+  padding-right: 0;
+}
+#menu ul.submenu a {
+  margin-right: 0;
+  border-right-width: 4px;
+  border-color: #5f7f9f;
+  padding-right: 5px;
+  color: #5f7f9f;
+}
+#menu ul.submenu a:hover {
+  margin-right: 0;
+  border-color: #00007f;
+}
+#menu ul.submenu a.current {
+  border-color: #00007f;
+}
+
+#main {
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-left: 150px;
+  right: auto;
+}

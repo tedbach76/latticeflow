@@ -1,0 +1,15 @@
+Completed: Wed Oct  6 14:32:25 EDT 2004
+
+Project Name: simpstep
+
+SHORT PROJECT DESCRIPTION
+
+The SIMP/STEP platform provides a fast, efficient, portable abstract framework for interactive and scripted cellular automata and lattice gas computing in the Python environment.  SIMP provides a high-level 'programmable matter' laboratory built on STEP.
+
+SOURCEFORGE REQUEST
+
+A product of the Boston University programmable matter group, SIMP/STEP is a maturing software project currently hosted at http://pm.bu.edu/step. The aim of STEP is to externalize the abstractions and methods that have accrued in the cellular automata machine (CAM) community and provide a nice mix of simplicity, efficiency,  generality, availability, and portability.  STEP is an abstract space-time event processor framework that, more than the hardware-oriented CAM-8 projects of yore, is decoupled from implementation-specific particulars.  
+
+SIMP is a 'simple interface to programmable matter,' a high-level programming interface for constructing STEP primitives for running, visualizing, scripting and interactively controlling cellular automata and lattice gas experiments.  When a SIMP program runs it generates abstract STEP primitives and passes them to a concrete STEP implementation which executes them in an efficient, effective way.  This allows the user to work at a high level of abstraction, and the software to be more portable and widely accessible---multiple STEP implementations are supported.  The current STEP runtime system targets PC's and runs efficiently on Windows and Linux systems.  Future plans include support for multiple processor and multi-computer parallel environments.
+
+To date, SIMP/STEP is the only significant Python environment for cellular automata.

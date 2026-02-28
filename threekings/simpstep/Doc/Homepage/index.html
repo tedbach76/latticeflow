@@ -1,0 +1,300 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+
+<head>
+   <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1" />
+   <link rel="stylesheet" type="text/css" href="default.css" />
+   <link rel="shortcut icon" href="simpfav.gif" />
+    <title>SIMP Home Page</title>
+</head>
+
+<body>
+
+<!---- ====================== SIDEBAR  ============================ ---->
+
+  <div id="side">
+  <img id="logo" src="simplogo.png" alt="SIMP Logo" />
+    <ul id="menu">
+      <li> <strong> SIMP Home Page</strong>
+      <li> <a href="#overview">overview</a>
+      <li> <a href="#news">news</a>
+      <li> <a href="#doc">docs</a>
+      <li> <a href="#download">download</a>
+      <li> <a href="#install"> install</a>
+<!--      <li> <a href="#install">install</a> -->
+<!--  <li> <a href="#test">testing</a> -->
+<!--  <li> <a href="#status">status and new features</a> -->
+      <li> <a href="#support">support</a> 
+      <li> <a href="#contributing">contributing</a> 
+    </ul>
+<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=121014&amp;type=1" width="88" height="31" border="0" alt="SourceForge.net Logo" /></a>
+
+  </div><!-- #side -->
+<div id="main">
+
+<!-- <center> <H1>SIMP Home Page</H1> </center> -->
+<ul>
+</ul>
+
+
+<a name="overview"><H1>SIMP Home Page</H1>
+
+SIMP is a Python environment for high-performance cellular and 
+lattice gas automata computing. 
+
+<!---- ================================================================ ---->
+<hr> <a name="news"><H2>News</H2>
+
+<tt>Wed Jan 26 14:33:16 EST 2005</tt> simp-0.6.9 released.
+<ul>
+  <li> supports non-orthogonal geometries and rendering 
+  <li> supports integer and floating point data
+  <li> a complete rewrite of STEP 0.5. 
+        (and a near complete rewrite of SIMP 0.6.0)
+  <li> runs on linux and windows 
+</ul>
+
+<hr> <a name="doc"><H2>Documentation</H2>
+<p>
+<UL>
+  <LI> SIMP Manual [<A href="http://pm.bu.edu/simpdist/simpmanual.ps">ps</A>,
+                    <A href="http://pm.bu.edu/simpdist/simpmanual.ps">pdf</A>]
+  <LI> Example code <A href="http://pm.bu.edu/simpdist/Examples.tgz">Examples.tgz</a> 
+</UL>
+
+
+<!---- ================================================================ ---->
+<hr> <a name="download"> <H2>Download</H2>
+There are two options for downloading SIMP and its dependencies:
+<ol>
+   <li> Download SIMP and its dependencies from our 
+            <a href="http://pm.bu.edu/simpdist/">distribution directory</a>.
+   <li> Download files separately from their project 
+            <a href="#deps">home pages</a>.
+</ol>
+Usually, the first option will be the most convenient, however, if you want
+the most up-to-date files, you should get them from the project home pages.
+
+
+
+<hr> <a name="install"> <H2>Install</H2>
+
+
+<!---
+<H3>Windows: First-Time Automatic Installation and Test</H3>
+<ol>
+  <li> Download and install <a href="http://python.org/download">Python</a> 
+       2.3.
+  <li> Download and install the simp packages and dependencies all together.
+      <P>
+      <ul> 
+        <li> Download <a href="dist/simp_all-0.6.3.win32-py2.3.zip">
+             dist/simp_all-0.6.3.win32-py2.3.zip</a>
+        <li> Unzip the file. (download winzip etc if needed).
+        <li> Double click the python script called <emph>install_simp</emph>
+        <li> Click "Ok" for all of the installer messages.
+             (numarray, Numeric,pygame, and simp will be installed)
+        <li> Double click <emph>install_simp</emph> again to test 
+             the simp installation. 
+      </ul>
+</ol>
+--->
+
+
+<H3>Windows and Linux/RPM: binary installations</H3>
+<ol>
+   <li> <a href="#download">Download</a> the <a href="#deps">dependencies</a> 
+        and install them in order (Python, Numeric, numarray, and then pygame). 
+        (Skip if already installed.)
+   <li> Install the simp binary package. <p>
+        Get it from the <a href="dist">distribution directory</a>
+        (.exe for windows or .rpm for linux). Be sure to choose 
+        a file that matches whatever python version you have 
+        installed.
+</ol>
+
+<H3>Unix/non-rpm linux: Building simp</H3>
+
+<ol> 
+    <li> Find and install the <a href="#deps">dependencies</a>,
+    <li> download the simp source .tar.gz file from 
+         the <a href="dist">distribution directory</a>,
+    <li> follow the directions in 'README.txt'.
+         (You probably just need to run <tt>python setup.py install</tt>)
+</ol>  
+
+<a name="deps">
+<H3>Dependencies</H3>
+
+For convenience, we redistribute all dependencies (except Python) in the <A
+HREF="dist">distribution directory</a> as sources, RPMS
+(FedoraCore1/Python2.2 and FedoraCore3/Python2.3), and Windows
+installers (Python 2.3).
+
+However, we provide links to the associated project pages for those
+who require the most up-to-date sources.  The SIMP project page is 
+<a href="http://sourceforge.net/projects/simpstep">http://sourceforge.net/projects/simpstep</a>.
+
+
+SIMP depends on <a href="http://python.org">Python</a> and 
+<ul>
+  <li> <a href="http://numpy.sourceforge.net/">Numeric</a> (version 23 or above)
+<!---
+      <ul>
+         <li> windows installer and binary distributions are at
+             <A HREF="http://sourceforge.net/project/showfiles.php?group_id=1369&release_id=223264">sourceforge</A>. 
+--->
+<!---         <li> We provide Linux RPMS in the 
+          <A HREF="dist/">distribution directory</A>.
+      </ul>
+--->
+  <li> <a href="http://www.stsci.edu/resources/software_hardware/numarray">numarray</a> (version 1.1 or above) 
+<!---
+      <ul>
+         <li> windows installer and binary distributions are at
+           <A HREF="http://sourceforge.net/project/showfiles.php?group_id=1369&release_id=223264">sourceforge</A>. 
+      </ul>
+--->
+  <li> and <a href="http://pygame.org/">pygame</a> (version 1.6 or above). 
+</ul>
+
+
+
+<!---- ================================================================ ---->
+<a name="test"><H3>Testing</H3>
+SIMP has a built-in test module.  To invoke it, just start python and 
+at the command prompt enter
+<code>  <br>
+>>> import simp.test    <br>
+>>> simp.test.test()    <br>
+</code>
+<p>
+If any errors are encountered, definitely send them to me, 
+<a href="mailto:tbach@bu.edu">tbach@bu.edu</a>.  In the alpha testing phase, 
+it would be helpful if you  sent the test result file even if there 
+are no errors---just so I get an idea of which systems currently work.
+
+
+<!---- ================================================================ ---->
+<hr> <a name="support"><H2>Support</H2>
+
+To submit bugs and requests please use sourceforge <a href="http://sourceforge.net/tracker/?group_id=121014">tracker tool</a>.
+
+To get help or discuss development issues, please use the sourceforge
+<a href="http://sourceforge.net/forum/?group_id=121014">forums</a>.
+
+
+<!---- ================================================================ ---->
+<hr> <a name="contributing"><H2>Contributing</H2> 
+
+We are always looking for suggestions to improve our code and faster
+backend STEP implementations.  See the developer section of the <a
+href="#doc"> SIMP manual</a> and the <a
+href="http://sourceforge.net/projects/simpstep"> simpstep project page
+on sourceforge</a> for more ideas on how to contribute.
+
+<!---- ================================================================ ---->
+<a name="qna"><H2>Questions and Answers</H2>
+
+<H4>How do I run PcCodeGen on a Windows system?</H4>
+
+   PcCodeGen generates and compiles C code on-the-fly. As such it requires 
+   that the system have a C compiler and that distutils---a Python facility
+   for building Python extensions in C---know about it.  <p>
+
+   By default, most Linux/Unix systems already have gcc (the GNU C compiler) 
+   installed and distutils will use it automatically. <p>
+
+   On most Windows systems, there is not a compiler installed by default, 
+   so you'll have to install one yourself.   <p>
+
+<H5>   MSVC (The easy route) </H5>
+
+     If you install the Microsoft Visual C compiler (freely available
+     from Microsoft as part of their .net sdk) distutils will use it
+     automatically.  <p>
+
+     You may have to make sure that the compiler executable appears in the 
+     user's path.  <p>
+
+<H5>   GCC (The route for Unix Geeks in living in Windows) </H5>
+    
+     I like to install GCC (with Mingw) as part of the Cygwin package using 
+     the handy installers from cygwin.org.  <p>
+
+     To use cygwin, you will need include the path to gcc in your user's path
+     and tell distutils that it should use the mingw32 native windows libraries
+     options by creating a file called pydistutils.cfg in your user 
+     home directory containg the following lines (left justified): <p>
+     <code>
+        [build] <br>
+        compiler=mingw32 <br>
+     </code><p>
+     If you did not use the cygwin installer (eg. you just installed mingw32), 
+     you may also need to make sure that gcc appears in your path. You can 
+     do this in Windows XP as follows<p>
+     <ul>
+      <li> Right-click My Computer, and then click Properties.
+      <li> Click the Advanced tab.
+      <li> Click Environment variables.
+      <li> Click one the following options, for either a user or a system variable:
+      <li> Click New to add a new variable name and value.
+      <li> Click an existing variable, and then click Edit to change its name 
+        or value.
+      <li> Click an existing variable, and then click Delete to remove it.
+    </ul>
+   <H5>Other compilers (Who does this?)</H5>
+
+      You may be able to use other compilers such as Borland.  To use them, 
+      you will just need to make sure that distutils knows about them---you
+      can find a list of supported compilers by running the following Python
+      code <p>
+      <code>
+         import distutils.ccompiler<br>
+         print distutils.ccompiler.show_compilers()<br>
+      </code>
+<H4> How do I run PcCodeGen on a Mac OS X system?</H4>
+
+   Well, you've got me there!
+
+<H4>In Windows, the SIMP console seems not to work---when it comes up, the
+viewable area just has a copy of the screen that used to be under it.
+What should I do?</H4>
+
+   I have only seen this problem once.  I was able to fix it by
+   changing the color mode from 32 to 16 bits.<p>
+
+   When it occured, it affected all pygame/SDL applications I tried to
+   run on the system. (FYI: SIMP uses pygame---a python interface to
+   the SDL, simple directmedia layer,---in order to provide the
+   console's viewable screen.) After Googling, I have found similar
+   reports on the web, but was not able to find a conclusive
+   solution---a few mentioned that the system video driver was likely
+   to blame.  Failing to find a better/newer driver for my Acer Aspire
+   3610's Moble Intel 915/GMS,910GML Express Chipset Family video
+   hardware, I tried changing the color mode and was happily rewarded
+   with a working SIMP console.<p>
+
+
+<H4>Why is there a lag between pressing a command and getting a response?</H4>
+  
+   This is an artifact of threading. The console and STEP live in separate
+   threads. 
+
+
+
+<hr>
+<small>
+Copyright (C) 2005 Ted Bach, BU Programmable Matter Group; <it> CVS info $Revision: 1.4 $</it> </small>
+
+</div>
+</body>
+</html>
+
+
+
+
+
+
